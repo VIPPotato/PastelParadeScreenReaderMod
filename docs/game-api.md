@@ -28,10 +28,16 @@ Confirmed action bindings:
 - `Tutorial` uses `MusicSelect`
 - `SkipTutorial` uses `MusicSelect`
 - Other key actions present in `InputCtrl`: `RhythmLeft`, `RhythmRight`, `RhythmUp`, `RhythmDown`, `RhythmOther`, `Menu`, `TabLeft`, `TabRight`, `Submit`, `Cancel`, `Click`
+- Input System gamepad controls confirmed in `MornInputCursorShowHide` include:
+  - face buttons
+  - shoulders (`leftShoulder`, `rightShoulder`)
+  - triggers (`leftTrigger`, `rightTrigger`)
+  - sticks and D-pad
 
 Source:
 
 - `decompiled/PastelParade/InputCtrl.cs`
+- `decompiled/MornInput/MornInput/MornInputCursorShowHide.cs`
 
 ---
 
@@ -43,6 +49,14 @@ Currently reserved by template:
 
 - `F1` help
 - `F12` debug toggle
+
+Current mod usage (implemented):
+
+- `F3` toggle menu position announcements
+- `F12` toggle debug mode
+- `[` / `]` cycle custom map/hub targets
+- gamepad `LT` / `RT` cycle custom map/hub targets
+  - note: intentionally avoids `TabLeft`/`TabRight` game actions to prevent `LB` conflict with the game's hub open behavior
 
 ---
 
@@ -176,3 +190,4 @@ Detailed extraction notes:
 ## Change Log
 
 - **2026-02-11:** Initial setup documentation created with tutorial/localization baseline findings.
+- **2026-02-11:** Added verified gamepad trigger availability and documented current mod key usage (`F3`, `F12`, `[`, `]`, `LT`, `RT`).

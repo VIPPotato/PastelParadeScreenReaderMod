@@ -31,8 +31,8 @@
 
 ## Current Phase
 
-**Phase:** Framework
-**Currently working on:** Converting `working/` mod to template-aligned structure while preserving behavior.
+**Phase:** Bugfix and UX hardening
+**Currently working on:** Addressing user-reported spam/announcement issues and adding persistent runtime toggles (debug + menu position).
 **Blocked by:** Nothing
 
 ## Codebase Analysis Progress
@@ -54,15 +54,28 @@ List features with their status:
 - **Project Skeleton** - DONE - Root `PastelParadeAccess.csproj`, `Main.cs`, Melon attributes, net472 build pipeline.
 - **Working Mod Integration** - DONE - Existing logic integrated and buildable from project root.
 - **Code Split (Phase 1)** - DONE - Main logic split into `Main.Core.cs` and `Main.Speech.cs`; hub-specific formatting moved to `HubHandler.cs`.
-- **Localization Framework (Mod Strings)** - IN PROGRESS - `Loc.cs` added (`en/jp/zh-CN/zh-TW`) and used for startup + hub tip prefix.
+- **Localization Framework (Mod Strings)** - DONE - `Loc.cs` expanded and used for startup + runtime toggle announcements + slider/menu position speech labels.
+- **Persistent Runtime Toggles** - DONE - `F12` debug mode and `F3` menu position announcements, both saved via MelonPreferences.
+- **Selection Spam Reduction** - DONE - Added stronger same-target selection dedupe to stop repeated `Start/Settings/Close` spam.
+- **Speech Formatting Improvements** - DONE - Slider announcements now include role (`<label> slider <value>`), dialogue uses `Name： Text`.
+- **Timing Calibration Fixes** - DONE - Suppressed calibration `Test` spam; timing value speech normalized to `ms`.
+- **World Map / Hub Trigger Remap** - DONE - Custom cycle controls support keyboard `[ ]` + gamepad `LT/RT`, no longer tied to `TabLeft/TabRight` fallback.
+- **Info + Menu Merge** - DONE - Added prefix merge flow so detail text and follow-up menu action can be spoken as one utterance.
 
 ## Pending Tests
 
 What the user should test in the next game session:
 
-- Mod loads in game and announces localized `mod_loaded` line once at startup.
-- Enter a hub tip context and confirm tip prefix is localized and spoken correctly.
-- Verify no regressions in existing working behaviors (menu navigation, dialog, world map announcements).
+- Startup/main menu no longer repeatedly says `Start` while idle.
+- Settings navigation is less spammy and slider lines include role (example: `BGM slider 60%`).
+- In timing calibration:
+  - value changes are announced with `ms`
+  - repeated `Test` spam is gone while idle/backing out
+- `F12` toggles debug mode and persists across game restarts (`MelonPreferences.cfg`).
+- `F3` toggles menu position mode and persists; when enabled, selection includes position (example `Close 5 of 5`).
+- On map/hub custom snapping, gamepad `LT/RT` cycles targets and `LB` no longer conflicts through mod fallback.
+- Entering level/detail menus after info reads as one utterance where applicable (detail + action like `Play`).
+- Dialogue line format has a space after speaker colon (`Amane： Still thinking about fish?`).
 
 ## Known Issues
 
@@ -83,7 +96,10 @@ Document important decisions so future sessions understand the reasoning:
 ## Key Bindings (Mod)
 
 - F1: Help
+- F3: Toggle menu position announcements
 - F12: Toggle debug mode
+- `[` / `]`: Cycle map/hub interactables
+- Gamepad `LT` / `RT`: Cycle map/hub interactables
 
 ## Notes for Next Session
 
@@ -92,6 +108,10 @@ Write anything the next conversation needs to know:
 - User requested strict template flow.
 - User confirmed decompiled game code is already available in `decompiled/`.
 - User wants `working/` improved: split code into separate `.cs` files per template, ensure localization framework exists, then add more features.
-- Start Phase 1 Tier 1 with targeted search (do not full-read large files): namespaces, singleton access points, input bindings, UI text access patterns.
+- Recent local commits:
+  - `e8e5522` - persisted `F12` debug + `F3` menu position toggles
+  - `4cddc4f` - selection spam reduction + slider/dialog speech formatting
+  - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
+- `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.
