@@ -84,6 +84,9 @@ public partial class Main : MelonMod
 	private DateTime _pendingToggleSpeakAt = DateTime.MinValue;
 	private string _lastSliderSpokenText;
 	private DateTime _lastSliderSpokenAt = DateTime.MinValue;
+	private int _lastSelectionSpokenTargetId;
+	private string _lastSelectionSpokenText;
+	private DateTime _lastSelectionSpokenAt = DateTime.MinValue;
 	private static readonly Regex _richTextTagRegex = new Regex("<[^>]*>", RegexOptions.Compiled);
 	// (removed) world-map move flag: bump feature removed
 
@@ -254,7 +257,7 @@ public partial class Main : MelonMod
 					_pendingNovelDeadline = DateTime.MinValue;
 
 					string spoken = (!string.IsNullOrWhiteSpace(speaker) && !string.Equals(speaker, line, StringComparison.Ordinal))
-						? (speaker + "：" + line)
+						? (speaker + "： " + line)
 						: line;
 					SendToTolk(spoken);
 				}
@@ -995,6 +998,7 @@ public partial class Main : MelonMod
 
 			string text = null;
 			string text2 = null;
+			bool isSliderSelection = false;
 
 			// 共用：從「同層/子物件」找最像 label / value 的文字（設定頁很多值是靠旁邊的 TextMeshProUGUI 顯示）
 			// 重要：這裡只掃 TMP_Text / UI.Text，避免掃整棵樹所有 Component 造成 UI 選取 lag。
@@ -1110,6 +1114,7 @@ public partial class Main : MelonMod
 					object component = TryGetComponent(val, type2);
 					if (component != null)
 					{
+						isSliderSelection = true;
 						// 優先讀旁邊真正顯示的值（例如音量 70%、時機 +12 ms、render scale x 1.2）
 						string valueText = FindNearbyText(LooksLikeValue);
 						// Calibration/時機調整：有些 UI 佈局把顯示值(TMP_Text)放在不同 group，nearby 掃描會抓不到，
@@ -1378,12 +1383,43 @@ public partial class Main : MelonMod
 				return;
 
 			string finalText = text;
-			if (!string.IsNullOrWhiteSpace(text2))
+			if (isSliderSelection)
+			{
+				string sliderRole = Loc.Get("role_slider");
+				if (string.IsNullOrWhiteSpace(sliderRole)) sliderRole = "slider";
+				sliderRole = sliderRole.Trim();
+
+				if (!string.IsNullOrWhiteSpace(text2))
+					text2 = text2.Trim();
+				if (!string.IsNullOrWhiteSpace(text))
+					text = text.Trim();
+
+				if (!string.IsNullOrWhiteSpace(text2) && !string.IsNullOrWhiteSpace(text))
+				{
+					if (!string.Equals(text2, text, StringComparison.OrdinalIgnoreCase))
+						finalText = text2 + " " + sliderRole + " " + text;
+					else
+						finalText = text2 + " " + sliderRole;
+				}
+				else if (!string.IsNullOrWhiteSpace(text2))
+				{
+					finalText = text2 + " " + sliderRole;
+				}
+				else if (!string.IsNullOrWhiteSpace(text))
+				{
+					finalText = sliderRole + " " + text;
+				}
+				else
+				{
+					finalText = sliderRole;
+				}
+			}
+			else if (!string.IsNullOrWhiteSpace(text2))
 			{
 				text2 = text2.Trim();
 				// 例如主選單常見的「開始 開始」：label/value 其實相同，直接去掉重複。
 				if (!string.Equals(text2, text, StringComparison.OrdinalIgnoreCase))
-						finalText = text2 + " " + text;
+					finalText = text2 + " " + text;
 			}
 
 			finalText = NormalizeOutputText(finalText);
@@ -1537,6 +1573,29 @@ public partial class Main : MelonMod
 						_dialogContextUntil = DateTime.MinValue;
 					}
 				}
+			}
+			catch { }
+
+			try
+			{
+				var nowSelection = DateTime.Now;
+				int targetId = GetUnityInstanceId(val);
+
+				// Fast global text de-dupe (different targets can transiently emit same text during rebuilds).
+				if (string.Equals(_lastSelectionSpokenText, finalText, StringComparison.Ordinal) &&
+				    (nowSelection - _lastSelectionSpokenAt).TotalMilliseconds < 350)
+					return;
+
+				// Strong de-dupe for same target to prevent repeated "Start/Settings/Close" spam.
+				if (targetId != 0 &&
+				    targetId == _lastSelectionSpokenTargetId &&
+				    string.Equals(_lastSelectionSpokenText, finalText, StringComparison.Ordinal) &&
+				    (nowSelection - _lastSelectionSpokenAt).TotalMilliseconds < 1200)
+					return;
+
+				_lastSelectionSpokenTargetId = targetId;
+				_lastSelectionSpokenText = finalText;
+				_lastSelectionSpokenAt = nowSelection;
 			}
 			catch { }
 
