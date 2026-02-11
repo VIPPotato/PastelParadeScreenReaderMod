@@ -6,9 +6,9 @@ using System.Text.RegularExpressions;
 using HarmonyLib;
 using MelonLoader;
 
-namespace TolkExporter;
+namespace PastelParadeAccess;
 
-internal static class Patches
+internal static partial class Patches
 {
 	public static bool AutoSpeakEnabled = true;
 	private static bool _earlyPatchesApplied;
@@ -933,7 +933,7 @@ internal static class Patches
 			_fullPatchesApplied = true;
 			try
 			{
-				TolkExporterMod.Instance?.OnPatchesApplied();
+				Main.Instance?.OnPatchesApplied();
 			}
 			catch
 			{
@@ -1128,7 +1128,7 @@ internal static class Patches
 			if (!AutoSpeakEnabled) return;
 			if (string.IsNullOrWhiteSpace(text)) return;
 			// enqueue only; do not speak here
-			TolkExporterMod.Instance?.EnqueueDebugFlowText(text);
+			Main.Instance?.EnqueueDebugFlowText(text);
 		}
 		catch { }
 	}
@@ -1213,7 +1213,7 @@ internal static class Patches
 				return;
 			_lastUiLoadingBundle = text;
 			_lastUiLoadingBundleAt = now;
-			TolkExporterMod.Instance?.SendToTolk(text);
+			Main.Instance?.SendToTolk(text);
 		}
 		catch { }
 	}
@@ -1267,7 +1267,7 @@ internal static class Patches
 				return;
 			_lastUiLoadingBundle = text;
 			_lastUiLoadingBundleAt = now;
-			TolkExporterMod.Instance?.SendToTolk(text);
+			Main.Instance?.SendToTolk(text);
 		}
 		catch { }
 	}
@@ -1312,7 +1312,7 @@ internal static class Patches
 				return;
 			_lastTitleStateTitleText = s;
 			_lastTitleStateTitleAt = now;
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch { }
 	}
@@ -1336,7 +1336,7 @@ internal static class Patches
 			_lastGameVersionText = s;
 			_lastGameVersionAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch { }
 	}
@@ -1401,7 +1401,7 @@ internal static class Patches
 				_lastGameTransitionMusicAt = now;
 			}
 
-			TolkExporterMod.Instance?.SendToTolk(spoken);
+			Main.Instance?.SendToTolk(spoken);
 		}
 		catch { }
 	}
@@ -1656,10 +1656,10 @@ internal static class Patches
 						if (!string.IsNullOrWhiteSpace(stSpoken))
 						{
 							// 翻頁合併輸出：先把焦點內容存起來，交給合併邏輯一次唸
-							if (TolkExporterMod.Instance?.IsTabMergePending == true)
-								TolkExporterMod.Instance?.SetPendingTabFocusText(stSpoken);
+							if (Main.Instance?.IsTabMergePending == true)
+								Main.Instance?.SetPendingTabFocusText(stSpoken);
 							else
-								TolkExporterMod.Instance?.SendToTolk(stSpoken);
+								Main.Instance?.SendToTolk(stSpoken);
 						}
 						return;
 					}
@@ -1697,10 +1697,10 @@ internal static class Patches
 
 						if (!string.IsNullOrWhiteSpace(nTitle))
 						{
-							if (TolkExporterMod.Instance?.IsTabMergePending == true)
-								TolkExporterMod.Instance?.SetPendingTabFocusText(nTitle);
+							if (Main.Instance?.IsTabMergePending == true)
+								Main.Instance?.SetPendingTabFocusText(nTitle);
 							else
-								TolkExporterMod.Instance?.SendToTolk(nTitle);
+								Main.Instance?.SendToTolk(nTitle);
 						}
 						return;
 					}
@@ -1761,10 +1761,10 @@ internal static class Patches
 			if (!string.IsNullOrWhiteSpace(diff)) parts.Add(diff);
 			var spoken = string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
 			if (string.IsNullOrWhiteSpace(spoken)) return;
-			if (TolkExporterMod.Instance?.IsTabMergePending == true)
-				TolkExporterMod.Instance?.SetPendingTabFocusText(spoken);
+			if (Main.Instance?.IsTabMergePending == true)
+				Main.Instance?.SetPendingTabFocusText(spoken);
 			else
-				TolkExporterMod.Instance?.SendToTolk(spoken);
+				Main.Instance?.SendToTolk(spoken);
 		}
 		catch (Exception ex)
 		{
@@ -1837,10 +1837,10 @@ internal static class Patches
 			if (!string.IsNullOrWhiteSpace(percent)) parts.Add(percent);
 			var spoken = string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
 			if (string.IsNullOrWhiteSpace(spoken)) return;
-			if (TolkExporterMod.Instance?.IsTabMergePending == true)
-				TolkExporterMod.Instance?.SetPendingTabFocusText(spoken);
+			if (Main.Instance?.IsTabMergePending == true)
+				Main.Instance?.SetPendingTabFocusText(spoken);
 			else
-				TolkExporterMod.Instance?.SendToTolk(spoken);
+				Main.Instance?.SendToTolk(spoken);
 		}
 		catch (Exception ex)
 		{
@@ -1885,7 +1885,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.TriggerReadSelection();
+			Main.Instance?.TriggerReadSelection();
 		}
 		catch { }
 	}
@@ -1895,7 +1895,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.TriggerReadSelection();
+			Main.Instance?.TriggerReadSelection();
 		}
 		catch { }
 	}
@@ -1905,7 +1905,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.TriggerReadSelection();
+			Main.Instance?.TriggerReadSelection();
 		}
 		catch { }
 	}
@@ -1915,7 +1915,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.TriggerReadSelection();
+			Main.Instance?.TriggerReadSelection();
 		}
 		catch { }
 	}
@@ -1928,7 +1928,7 @@ internal static class Patches
 			if (!__result) return;
 			var s = GetTabTitle(__instance);
 			if (string.IsNullOrWhiteSpace(s)) return;
-			TolkExporterMod.Instance?.RequestSpeakTabTitleMerged(s);
+			Main.Instance?.RequestSpeakTabTitleMerged(s);
 		}
 		catch { }
 	}
@@ -1941,7 +1941,7 @@ internal static class Patches
 			if (!__result) return;
 			var s = GetTabTitle(__instance);
 			if (string.IsNullOrWhiteSpace(s)) return;
-			TolkExporterMod.Instance?.RequestSpeakTabTitleMerged(s);
+			Main.Instance?.RequestSpeakTabTitleMerged(s);
 		}
 		catch { }
 	}
@@ -2320,7 +2320,7 @@ internal static class Patches
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
 			// 每次「重建完成點」都重新啟動 pending window，讓後續 title set_text 可以被捕捉
-			TolkExporterMod.Instance?.RequestSpeakSettingsCategoryTitle(__instance, fromRebuild: true);
+			Main.Instance?.RequestSpeakSettingsCategoryTitle(__instance, fromRebuild: true);
 		}
 		catch { }
 	}
@@ -2332,11 +2332,11 @@ internal static class Patches
 			if (!AutoSpeakEnabled) return;
 			// 依遊戲原始碼，在進入設定頁時把「真正的 toggle 控制項」註冊成白名單：
 			// 只有這些才允許輸出 on/off，避免主選單/清單/行為按鈕被誤加狀態。
-			TolkExporterMod.Instance?.RegisterKnownSettingsToggles(__instance);
+			Main.Instance?.RegisterKnownSettingsToggles(__instance);
 			// 分類切換時，標題文字常在同一個 header 上「晚一點才更新」，
 			// 若用全場景掃描很容易唸到上一個分類。這裡把 state instance 交給 mod，
 			// 讓它以該 state 所在 Canvas 範圍做掃描，並等文字穩定後再唸。
-			TolkExporterMod.Instance?.RequestSpeakSettingsCategoryTitle(__instance);
+			Main.Instance?.RequestSpeakSettingsCategoryTitle(__instance);
 
 			// 設定頁的「群組/標題」很多是 Prefab + Localize 靜態文字，不一定會走 TMP_Text.set_text。
 			// 在畫面啟用後的短窗口內，用 heuristic 掃 TMP_Text，把 instanceId 加入 _settingsTmpTextIds。
@@ -2350,7 +2350,7 @@ internal static class Patches
 		try
 		{
 			// 離開設定頁時清掉白名單，避免回到主選單時又被當成開關輸出 on/off。
-			TolkExporterMod.Instance?.ClearKnownSettingsToggles();
+			Main.Instance?.ClearKnownSettingsToggles();
 			// 避免 instanceId 重用造成後續誤朗讀
 			_settingsTmpTextIds.Clear();
 			_settingsCaptureRootGo = null;
@@ -2364,7 +2364,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnSliderValueChanged(__instance);
+			Main.Instance?.OnSliderValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2374,7 +2374,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnSliderValueChanged(__instance);
+			Main.Instance?.OnSliderValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2385,7 +2385,7 @@ internal static class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			// __1 代表 sendCallback；就算是 false 我們也只會在「使用者剛進頁/剛選取」之後才唸（mod 端會節流）。
-			TolkExporterMod.Instance?.OnSliderValueChanged(__instance);
+			Main.Instance?.OnSliderValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2395,7 +2395,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnToggleValueChanged(__instance);
+			Main.Instance?.OnToggleValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2405,7 +2405,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnToggleValueChanged(__instance);
+			Main.Instance?.OnToggleValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2415,7 +2415,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnToggleValueChanged(__instance);
+			Main.Instance?.OnToggleValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2481,7 +2481,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.OnToggleValueChanged(__instance);
+			Main.Instance?.OnToggleValueChanged(__instance);
 		}
 		catch { }
 	}
@@ -2498,7 +2498,11 @@ internal static class Patches
 				string text = obj.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(obj) as string;
 				if (!string.IsNullOrWhiteSpace(text))
 				{
-					TolkExporterMod.Instance?.SendToTolk("[Tip] " + text);
+					string spoken = HubHandler.BuildTipAnnouncement(text);
+					if (!string.IsNullOrWhiteSpace(spoken))
+					{
+						Main.Instance?.SendToTolk(spoken);
+					}
 				}
 			}
 		}
@@ -2570,7 +2574,7 @@ internal static class Patches
 			}
 			if (!string.IsNullOrWhiteSpace(text5))
 			{
-				TolkExporterMod.Instance?.SendToTolk(text5);
+				Main.Instance?.SendToTolk(text5);
 			}
 		}
 		catch (Exception ex)
@@ -2599,7 +2603,7 @@ internal static class Patches
 			_lastWorldMapName = s;
 			_lastWorldMapNameAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -2639,7 +2643,7 @@ internal static class Patches
 			_lastWorldMapName = s;
 			_lastWorldMapNameAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch { }
 	}
@@ -2871,7 +2875,7 @@ internal static class Patches
 			{
 				string s = BuildWorldMapInteractableSpeakText(target.it, lang, saveData);
 				if (!string.IsNullOrWhiteSpace(s))
-					TolkExporterMod.Instance?.SendToTolk(s);
+					Main.Instance?.SendToTolk(s);
 			}
 			catch { }
 		}
@@ -3081,7 +3085,7 @@ internal static class Patches
 				{
 					_lastTimingSettingText = s;
 					_lastTimingSettingTextAt = now;
-					TolkExporterMod.Instance?.SendToTolk(s);
+					Main.Instance?.SendToTolk(s);
 				}
 			}
 
@@ -3277,9 +3281,9 @@ internal static class Patches
 			lastText = text;
 			lastAt = now;
 			if (speakAsDialogBodyOnce)
-				TolkExporterMod.Instance?.SpeakDialogBodyOnceDelayed(text, 1400);
+				Main.Instance?.SpeakDialogBodyOnceDelayed(text, 1400);
 			else
-				TolkExporterMod.Instance?.SendToTolk(text);
+				Main.Instance?.SendToTolk(text);
 
 			if (closeAfterFirst)
 				captureUntil = DateTime.MinValue;
@@ -3514,7 +3518,7 @@ internal static class Patches
 				return;
 			lastText = best;
 			lastAt = now;
-			TolkExporterMod.Instance?.SendToTolk(best);
+			Main.Instance?.SendToTolk(best);
 		}
 		catch { }
 	}
@@ -3864,7 +3868,7 @@ internal static class Patches
 				return;
 			_lastHubInteractableText = s;
 			_lastHubInteractableTextAt = now;
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch { }
 	}
@@ -3888,7 +3892,7 @@ internal static class Patches
 			_lastMusicSelectHeader = s;
 			_lastMusicSelectHeaderAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -3915,7 +3919,7 @@ internal static class Patches
 			_lastAreaMoveText = s;
 			_lastAreaMoveTextAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -3953,10 +3957,10 @@ internal static class Patches
 					{
 						text = StripTmpRichText(text).Trim();
 						if (string.IsNullOrWhiteSpace(text)) return;
-						if (TolkExporterMod.Instance?.IsTabMergePending == true)
-							TolkExporterMod.Instance?.SetPendingTabFocusText(text);
+						if (Main.Instance?.IsTabMergePending == true)
+							Main.Instance?.SetPendingTabFocusText(text);
 						else
-							TolkExporterMod.Instance?.SendToTolk(text);
+							Main.Instance?.SendToTolk(text);
 						break;
 					}
 				}
@@ -3989,7 +3993,7 @@ internal static class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			// 主選單剛進來時，主機通常會設定初始選取；這裡主動觸發一次讀取，修正「主選單沒反應」。
-			TolkExporterMod.Instance?.TriggerReadSelection();
+			Main.Instance?.TriggerReadSelection();
 
 			// 遊戲啟動畫面/Title：UI Prefab + Localize 文字不一定會再 set_text，
 			// 正確作法：直接讀取 Title UI Prefab 上 TMP 的「最終顯示文字」。
@@ -4103,7 +4107,7 @@ internal static class Patches
 			_lastTitleHeaderText = spoken;
 			_lastTitleHeaderAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(spoken);
+			Main.Instance?.SendToTolk(spoken);
 		}
 		catch { }
 	}
@@ -4127,7 +4131,7 @@ internal static class Patches
 			if (string.Equals(_lastTalkLine, s, StringComparison.Ordinal)) return;
 			_lastTalkLine = s;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -4152,7 +4156,7 @@ internal static class Patches
 			if (string.Equals(_lastTutorialLeftCount, s, StringComparison.Ordinal)) return;
 			_lastTutorialLeftCount = s;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -4168,7 +4172,7 @@ internal static class Patches
 			// 依原始碼：ResultInitState.OnStateBegin 進入結果頁並呼叫 ResultView.SetUp；
 			// 這個時間點 UI 常會同步初始化/重設導覽焦點，可能引發額外 selection 朗讀。
 			// 因此在「明確進場點」做短暫抑制，避免結果總結之外再多送一條。
-			TolkExporterMod.Instance?.SuppressSelectionFor(1200);
+			Main.Instance?.SuppressSelectionFor(1200);
 		}
 		catch { }
 	}
@@ -4178,7 +4182,7 @@ internal static class Patches
 		try
 		{
 			// 離開結果流程後，清掉結果文字監聽的 context
-			TolkExporterMod.Instance?.ClearResultContext();
+			Main.Instance?.ClearResultContext();
 		}
 		catch { }
 	}
@@ -4220,7 +4224,7 @@ internal static class Patches
 			_lastNovelLineRequested = s;
 			_lastNovelLineRequestedAt = now;
 
-			TolkExporterMod.Instance?.RequestSpeakNovelLine(s, __1, __args);
+			Main.Instance?.RequestSpeakNovelLine(s, __1, __args);
 		}
 		catch (Exception ex)
 		{
@@ -4235,7 +4239,7 @@ internal static class Patches
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
 			// __0 = RuntimePlayData（依原始碼：ResultView.SetUp(RuntimePlayData runtimePlayData)）
-			TolkExporterMod.Instance?.EnterResultContextFromView(__instance);
+			Main.Instance?.EnterResultContextFromView(__instance);
 
 			Type tmpType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro") ?? Type.GetType("TMPro.TMP_Text");
 
@@ -4620,7 +4624,7 @@ internal static class Patches
 			var spoken = string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
 			if (string.IsNullOrWhiteSpace(spoken)) return;
 
-			TolkExporterMod.Instance?.SendToTolk(spoken);
+			Main.Instance?.SendToTolk(spoken);
 		}
 		catch (Exception ex)
 		{
@@ -4657,7 +4661,7 @@ internal static class Patches
 								{
 									_lastTimingHintText = s0;
 									_lastTimingHintAt = now0;
-									TolkExporterMod.Instance?.SpeakDialogBodyOnceDelayed(s0, 1400);
+									Main.Instance?.SpeakDialogBodyOnceDelayed(s0, 1400);
 								}
 								_timingHintCaptureUntil = DateTime.MinValue;
 							}
@@ -4677,7 +4681,7 @@ internal static class Patches
 						{
 							_lastTimingHintText = s;
 							_lastTimingHintAt = now;
-							TolkExporterMod.Instance?.SpeakDialogBodyOnceDelayed(s, 1400);
+							Main.Instance?.SpeakDialogBodyOnceDelayed(s, 1400);
 						}
 					}
 					// Value text (ms): normal timing value speak
@@ -4686,7 +4690,7 @@ internal static class Patches
 					{
 						_lastTimingSettingText = s;
 						_lastTimingSettingTextAt = now;
-						TolkExporterMod.Instance?.SendToTolk(s);
+						Main.Instance?.SendToTolk(s);
 					}
 				}
 				else if (id != 0 && _settingsTmpTextIds.Contains(id))
@@ -4698,7 +4702,7 @@ internal static class Patches
 					{
 						_lastSettingsValueText = s;
 						_lastSettingsValueTextAt = now;
-						TolkExporterMod.Instance?.SendToTolk(s);
+						Main.Instance?.SendToTolk(s);
 					}
 				}
 				else if (id != 0 && _startupTmpTextIds.Contains(id))
@@ -4710,7 +4714,7 @@ internal static class Patches
 					{
 						_lastStartupSpoken = s;
 						_lastStartupSpokenAt = now;
-						TolkExporterMod.Instance?.SendToTolk(s);
+						Main.Instance?.SendToTolk(s);
 					}
 				}
 				else if (id != 0 && _loadingTmpTextIds.Contains(id))
@@ -4722,15 +4726,15 @@ internal static class Patches
 					{
 						_lastLoadingSpoken = s;
 						_lastLoadingSpokenAt = now;
-						TolkExporterMod.Instance?.SendToTolk(s);
+						Main.Instance?.SendToTolk(s);
 					}
 				}
 			}
 			catch { }
 
-			TolkExporterMod.Instance?.NotifyResultTextChanged(__instance, __0);
+			Main.Instance?.NotifyResultTextChanged(__instance, __0);
 			// 設定分類標題（Language / Other 等）：只在進入設定頁的短窗口內收集候選，不會全域洗語音。
-			TolkExporterMod.Instance?.NotifySettingsCategoryTitleTextChanged(__instance, __0);
+			Main.Instance?.NotifySettingsCategoryTitleTextChanged(__instance, __0);
 		}
 		catch { }
 	}
@@ -4740,8 +4744,8 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.NotifyResultTextChanged(__instance, __0);
-			TolkExporterMod.Instance?.NotifySettingsCategoryTitleTextChanged(__instance, __0);
+			Main.Instance?.NotifyResultTextChanged(__instance, __0);
+			Main.Instance?.NotifySettingsCategoryTitleTextChanged(__instance, __0);
 		}
 		catch { }
 	}
@@ -4772,7 +4776,7 @@ internal static class Patches
 			_lastTimingDiffText = s;
 			_lastTimingDiffAt = now;
 
-			TolkExporterMod.Instance?.SendToTolk(s);
+			Main.Instance?.SendToTolk(s);
 		}
 		catch (Exception ex)
 		{
@@ -4785,7 +4789,7 @@ internal static class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
-			TolkExporterMod.Instance?.ScheduleParadeCreditSpeak(__instance, creditInfo);
+			Main.Instance?.ScheduleParadeCreditSpeak(__instance, creditInfo);
 		}
 		catch { }
 	}
@@ -4796,7 +4800,7 @@ internal static class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			// 用 __0 當作「目標焦點」，避免切頁/切語言時先唸上一個 selection 一次
-			TolkExporterMod.Instance?.TriggerReadSelection(__0);
+			Main.Instance?.TriggerReadSelection(__0);
 			// Prefab/Localize 靜態文字：在畫面啟用窗口內，利用 selection 變更時機再掃一次 root（避免只有早期掃描、錯過最終文字）
 			if (_startupCaptureRootGo != null && DateTime.Now <= _startupCaptureUntil)
 				RegisterHeuristicTmpTextIdsUnderRoot(_startupCaptureRootGo, _startupTmpTextIds, ref _startupLastHeuristicScanAt);
