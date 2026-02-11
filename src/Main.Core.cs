@@ -106,6 +106,8 @@ public partial class Main : MelonMod
 	private DateTime _pendingTabSpeakAt = DateTime.MinValue;
 	private DateTime _pendingTabDeadline = DateTime.MinValue;
 	private DateTime _suppressSelectionUntil = DateTime.MinValue;
+	private string _pendingSelectionPrefix;
+	private DateTime _pendingSelectionPrefixUntil = DateTime.MinValue;
 
 	private readonly ConcurrentQueue<string> _speechQueue = new ConcurrentQueue<string>();
 	private readonly AutoResetEvent _speechEvent = new AutoResetEvent(false);
@@ -1576,6 +1578,9 @@ public partial class Main : MelonMod
 			}
 			catch { }
 
+			finalText = TryMergePendingSelectionPrefix(finalText);
+			if (string.IsNullOrWhiteSpace(finalText)) return;
+
 			try
 			{
 				var nowSelection = DateTime.Now;
@@ -1611,6 +1616,35 @@ public partial class Main : MelonMod
 		catch (Exception ex)
 		{
 			MelonLogger.Warning("TolkExporter: ReadCurrentSelectionAndSpeak exception: " + ex);
+		}
+	}
+
+	private string TryMergePendingSelectionPrefix(string selectionText)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(selectionText)) return selectionText;
+			if (DateTime.Now > _pendingSelectionPrefixUntil) return selectionText;
+			if (string.IsNullOrWhiteSpace(_pendingSelectionPrefix)) return selectionText;
+
+			string action = NormalizeOutputText(selectionText);
+			if (string.IsNullOrWhiteSpace(action)) return selectionText;
+
+			// Only merge short actionable labels ("Play", "Close", etc.).
+			if (action.Length > 26) return selectionText;
+			if (action.IndexOf('：') >= 0 || action.IndexOf(':') >= 0) return selectionText;
+
+			string prefix = _pendingSelectionPrefix;
+			_pendingSelectionPrefix = null;
+			_pendingSelectionPrefixUntil = DateTime.MinValue;
+
+			if (string.IsNullOrWhiteSpace(prefix)) return selectionText;
+			if (string.Equals(prefix, action, StringComparison.OrdinalIgnoreCase)) return selectionText;
+			return NormalizeOutputText(prefix + " " + action);
+		}
+		catch
+		{
+			return selectionText;
 		}
 	}
 
@@ -1746,6 +1780,34 @@ public partial class Main : MelonMod
 			var until = DateTime.Now.AddMilliseconds(milliseconds);
 			// 取較晚者，避免覆蓋更長的抑制（例如翻頁合併）
 			if (_suppressSelectionUntil < until) _suppressSelectionUntil = until;
+		}
+		catch { }
+	}
+
+	internal void QueueSelectionPrefix(string text, int holdMs = 1200)
+	{
+		try
+		{
+			if (_isQuitting) return;
+			text = NormalizeOutputText(text);
+			if (string.IsNullOrWhiteSpace(text)) return;
+			if (holdMs < 100) holdMs = 100;
+			if (holdMs > 5000) holdMs = 5000;
+			_pendingSelectionPrefix = text;
+			_pendingSelectionPrefixUntil = DateTime.Now.AddMilliseconds(holdMs);
+		}
+		catch { }
+	}
+
+	internal void SpeakAndQueueSelectionPrefix(string text, int holdMs = 1200)
+	{
+		try
+		{
+			if (_isQuitting) return;
+			text = NormalizeOutputText(text);
+			if (string.IsNullOrWhiteSpace(text)) return;
+			QueueSelectionPrefix(text, holdMs);
+			SendToTolk(text);
 		}
 		catch { }
 	}

@@ -55,10 +55,14 @@ internal static partial class Patches
 	// WorldMap interactables cycle ([ / ])
 	private static int _worldMapCycleCurrentInteractableId;
 	private static DateTime _worldMapCycleLastAt = DateTime.MinValue;
+	private static bool _worldMapLeftTriggerDown;
+	private static bool _worldMapRightTriggerDown;
 
 	// Hub (收藏/相簿等物件互動) cycle ([ / ])
 	private static int _hubCycleCurrentInteractableId;
 	private static DateTime _hubCycleLastAt = DateTime.MinValue;
+	private static bool _hubLeftTriggerDown;
+	private static bool _hubRightTriggerDown;
 	private static string _lastHubInteractableText;
 	private static DateTime _lastHubInteractableTextAt = DateTime.MinValue;
 
@@ -2574,7 +2578,7 @@ internal static partial class Patches
 			}
 			if (!string.IsNullOrWhiteSpace(text5))
 			{
-				Main.Instance?.SendToTolk(text5);
+				Main.Instance?.SpeakAndQueueSelectionPrefix(text5, 1400);
 			}
 		}
 		catch (Exception ex)
@@ -2655,11 +2659,14 @@ internal static partial class Patches
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
 
-			// 直接抓鍵盤的 [ / ]（Unity 6000 多半走新 InputSystem；legacy Input.GetKeyDown 可能抓不到）
-			// 同時保留遊戲 mapping（TabLeft/TabRight）當作 fallback
-			object input = __instance.GetType().GetField("_input", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
-			bool prev = IsInputSystemKeyPressedThisFrame("leftBracketKey") || IsLegacyKeyDown("LeftBracket") || GetBoolProperty(input, "TabLeft");
-			bool next = IsInputSystemKeyPressedThisFrame("rightBracketKey") || IsLegacyKeyDown("RightBracket") || GetBoolProperty(input, "TabRight");
+			// Keyboard: [ / ]
+			// Gamepad: remapped to LT / RT (avoid LB conflict with game default hub action)
+			bool prev = IsInputSystemKeyPressedThisFrame("leftBracketKey")
+			         || IsLegacyKeyDown("LeftBracket")
+			         || IsGamepadTriggerPressedThisFrame("leftTrigger", ref _worldMapLeftTriggerDown);
+			bool next = IsInputSystemKeyPressedThisFrame("rightBracketKey")
+			         || IsLegacyKeyDown("RightBracket")
+			         || IsGamepadTriggerPressedThisFrame("rightTrigger", ref _worldMapRightTriggerDown);
 			if (!next && !prev) return;
 
 			var now = DateTime.Now;
@@ -2875,7 +2882,7 @@ internal static partial class Patches
 			{
 				string s = BuildWorldMapInteractableSpeakText(target.it, lang, saveData);
 				if (!string.IsNullOrWhiteSpace(s))
-					Main.Instance?.SendToTolk(s);
+					Main.Instance?.SpeakAndQueueSelectionPrefix(s, 1400);
 			}
 			catch { }
 		}
@@ -3002,6 +3009,77 @@ internal static partial class Patches
 		catch { return false; }
 	}
 
+	private static bool LooksLikeTimingValueText(string text)
+	{
+		try
+		{
+			text = StripTmpRichText(text ?? "").Trim();
+			if (string.IsNullOrWhiteSpace(text)) return false;
+			if (text.IndexOf("ms", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+			string normalized = text
+				.Replace("＋", "+")
+				.Replace("－", "-")
+				.Replace("−", "-")
+				.Trim();
+
+			double _;
+			return double.TryParse(normalized, out _);
+		}
+		catch { return false; }
+	}
+
+	private static string NormalizeTimingValueForSpeech(string text)
+	{
+		try
+		{
+			text = StripTmpRichText(text ?? "").Trim();
+			if (string.IsNullOrWhiteSpace(text)) return null;
+			if (!LooksLikeTimingValueText(text)) return null;
+			if (text.IndexOf("ms", StringComparison.OrdinalIgnoreCase) >= 0) return text;
+			return text + " ms";
+		}
+		catch { return null; }
+	}
+
+	private static bool IsTimingHintCandidateText(string text)
+	{
+		try
+		{
+			text = StripTmpRichText(text ?? "").Trim();
+			if (string.IsNullOrWhiteSpace(text)) return false;
+			if (LooksLikeTimingValueText(text)) return false;
+
+			string lower = text.ToLowerInvariant();
+			if (lower == "test" || lower == "close" || lower == "back" || lower == "play" || lower == "start")
+				return false;
+			if (lower == "settings" || lower == "quit") return false;
+
+			// Keep it conservative to avoid button-label spam in timing setting.
+			return text.Length >= 8;
+		}
+		catch { return false; }
+	}
+
+	private static bool IsTimingSettingStateActive()
+	{
+		try
+		{
+			Type t = AccessTools.TypeByName("PastelParade.UITimingSettingState");
+			if (t == null) return false;
+			Array arr = FindUnityObjectsByType(t);
+			if (arr == null || arr.Length == 0) return false;
+			for (int i = 0; i < arr.Length; i++)
+			{
+				var state = arr.GetValue(i);
+				if (state == null) continue;
+				if (IsComponentActive(state)) return true;
+			}
+		}
+		catch { }
+		return false;
+	}
+
 	private static bool GetBoolProperty(object obj, string propertyName)
 	{
 		try
@@ -3057,6 +3135,69 @@ internal static partial class Patches
 		catch { return false; }
 	}
 
+	private static bool IsGamepadTriggerPressedThisFrame(string triggerPropertyName, ref bool lastDown)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(triggerPropertyName)) return false;
+
+			var gamepadType = Type.GetType("UnityEngine.InputSystem.Gamepad, Unity.InputSystem");
+			if (gamepadType == null) return false;
+
+			var pCurrent = gamepadType.GetProperty("current", BindingFlags.Static | BindingFlags.Public);
+			var gamepad = pCurrent?.GetValue(null);
+			if (gamepad == null)
+			{
+				lastDown = false;
+				return false;
+			}
+
+			var pTrigger = gamepad.GetType().GetProperty(triggerPropertyName, BindingFlags.Instance | BindingFlags.Public);
+			var trigger = pTrigger?.GetValue(gamepad);
+			if (trigger == null) return false;
+
+			// Preferred path when available.
+			var pPressedThisFrame = trigger.GetType().GetProperty("wasPressedThisFrame", BindingFlags.Instance | BindingFlags.Public);
+			if (pPressedThisFrame != null)
+			{
+				var pressedThisFrameObj = pPressedThisFrame.GetValue(trigger);
+				if (pressedThisFrameObj is bool pressedThisFrame)
+				{
+					lastDown = pPressedThisFrame.GetValue(trigger) is bool b2 && b2;
+					return pressedThisFrame;
+				}
+			}
+
+			// Fallback to value edge-detection.
+			bool down = false;
+			var pIsPressed = trigger.GetType().GetProperty("isPressed", BindingFlags.Instance | BindingFlags.Public);
+			if (pIsPressed != null)
+			{
+				var isPressedObj = pIsPressed.GetValue(trigger);
+				if (isPressedObj is bool b) down = b;
+			}
+			else
+			{
+				var miReadValue = trigger.GetType().GetMethod("ReadValue", BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null);
+				if (miReadValue != null)
+				{
+					var valueObj = miReadValue.Invoke(trigger, null);
+					float value = Convert.ToSingle(valueObj);
+					down = value >= 0.55f;
+				}
+			}
+
+			bool pressed = down && !lastDown;
+			lastDown = down;
+			return pressed;
+		}
+		catch
+		{
+			lastDown = false;
+			return false;
+		}
+	}
+
 	private static void UITimingSettingState_OnStateBegin_Postfix(object __instance)
 	{
 		try
@@ -3077,7 +3218,7 @@ internal static partial class Patches
 
 			// speak current timing text once on enter
 			string s = timingText?.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(timingText) as string;
-			s = StripTmpRichText(s ?? "").Trim();
+			s = NormalizeTimingValueForSpeech(s);
 			if (!string.IsNullOrWhiteSpace(s))
 			{
 				var now = DateTime.Now;
@@ -3679,9 +3820,13 @@ internal static partial class Patches
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
 
-			// [ = prev, ] = next
-			bool prev = IsInputSystemKeyPressedThisFrame("leftBracketKey") || IsLegacyKeyDown("LeftBracket");
-			bool next = IsInputSystemKeyPressedThisFrame("rightBracketKey") || IsLegacyKeyDown("RightBracket");
+			// [ / ] or gamepad LT / RT
+			bool prev = IsInputSystemKeyPressedThisFrame("leftBracketKey")
+			         || IsLegacyKeyDown("LeftBracket")
+			         || IsGamepadTriggerPressedThisFrame("leftTrigger", ref _hubLeftTriggerDown);
+			bool next = IsInputSystemKeyPressedThisFrame("rightBracketKey")
+			         || IsLegacyKeyDown("RightBracket")
+			         || IsGamepadTriggerPressedThisFrame("rightTrigger", ref _hubRightTriggerDown);
 			if (!next && !prev) return;
 
 			var now = DateTime.Now;
@@ -4624,7 +4769,7 @@ internal static partial class Patches
 			var spoken = string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
 			if (string.IsNullOrWhiteSpace(spoken)) return;
 
-			Main.Instance?.SendToTolk(spoken);
+			Main.Instance?.SpeakAndQueueSelectionPrefix(spoken, 1800);
 		}
 		catch (Exception ex)
 		{
@@ -4652,8 +4797,7 @@ internal static partial class Patches
 						if (go != null && IsSameOrDescendant(go, _timingHintCaptureRootGo, 40))
 						{
 							string s0 = StripTmpRichText(__0 ?? "").Trim();
-							// exclude the value text itself (ms)
-							if (!string.IsNullOrWhiteSpace(s0) && s0.IndexOf("ms", StringComparison.OrdinalIgnoreCase) < 0 && s0.Length >= 4)
+							if (IsTimingHintCandidateText(s0))
 							{
 								_timingTmpTextIds.Add(id);
 								var now0 = DateTime.Now;
@@ -4674,23 +4818,13 @@ internal static partial class Patches
 				{
 					string s = StripTmpRichText(__0 ?? "").Trim();
 					var now = DateTime.Now;
-					// Hint text: route through dialog-like output (once)
-					if (!string.IsNullOrWhiteSpace(s) && s.IndexOf("ms", StringComparison.OrdinalIgnoreCase) < 0 && s.Length >= 4)
+					string timingValue = NormalizeTimingValueForSpeech(s);
+					if (!string.IsNullOrWhiteSpace(timingValue) &&
+					    !(string.Equals(_lastTimingSettingText, timingValue, StringComparison.Ordinal) && (now - _lastTimingSettingTextAt).TotalMilliseconds < 180))
 					{
-						if (!(string.Equals(_lastTimingHintText, s, StringComparison.Ordinal) && (now - _lastTimingHintAt).TotalMilliseconds < 1500))
-						{
-							_lastTimingHintText = s;
-							_lastTimingHintAt = now;
-							Main.Instance?.SpeakDialogBodyOnceDelayed(s, 1400);
-						}
-					}
-					// Value text (ms): normal timing value speak
-					else if (!string.IsNullOrWhiteSpace(s) &&
-					         !(string.Equals(_lastTimingSettingText, s, StringComparison.Ordinal) && (now - _lastTimingSettingTextAt).TotalMilliseconds < 180))
-					{
-						_lastTimingSettingText = s;
+						_lastTimingSettingText = timingValue;
 						_lastTimingSettingTextAt = now;
-						Main.Instance?.SendToTolk(s);
+						Main.Instance?.SendToTolk(timingValue);
 					}
 				}
 				else if (id != 0 && _settingsTmpTextIds.Contains(id))
@@ -4756,6 +4890,7 @@ internal static partial class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
+			if (IsTimingSettingStateActive()) return;
 
 			// 直接讀 UI 上的字串（已經是遊戲實際顯示的內容），避免自己計算數值或翻譯。
 			object tmp = __instance.GetType().GetField("_diffText", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
@@ -4765,8 +4900,7 @@ internal static partial class Patches
 			if (!IsComponentActive(tmp)) return;
 
 			string s = tmp.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(tmp) as string;
-			if (string.IsNullOrWhiteSpace(s)) return;
-			s = StripTmpRichText(s).Trim();
+			s = NormalizeTimingValueForSpeech(s);
 			if (string.IsNullOrWhiteSpace(s)) return;
 
 			// 節流/去重：此文字可能高頻觸發，避免洗爆語音
