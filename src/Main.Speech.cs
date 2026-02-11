@@ -202,20 +202,19 @@ private void InitTolk()
 
 	private void LogSpeakDebug(string text)
 	{
-		// Debug 用：把「實際送去朗讀」的字串寫進 Latest.log，方便你驗證 UI/清單朗讀內容
 		try
 		{
 			if (_isQuitting) return;
+			if (!DebugLogger.Enabled) return;
 			if (string.IsNullOrWhiteSpace(text)) return;
 
 			var now = DateTime.Now;
-			// 去重/節流：避免拖曳 slider 或重複事件把 log 洗爆
 			if (string.Equals(_lastLoggedSpeak, text, StringComparison.Ordinal) && (now - _lastLoggedSpeakAt).TotalMilliseconds < 250)
 				return;
 
 			_lastLoggedSpeak = text;
 			_lastLoggedSpeakAt = now;
-			MelonLogger.Msg("[Tolk Exporter] Speak: " + text);
+			DebugLogger.Log("[Tolk Exporter] Speak: " + text);
 		}
 		catch { }
 	}

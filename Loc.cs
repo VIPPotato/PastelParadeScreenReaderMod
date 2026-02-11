@@ -13,25 +13,49 @@ public static class Loc
     private static readonly Dictionary<string, string> _en = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["mod_loaded"] = "Pastel Parade accessibility mod loaded.",
-        ["tip_prefix"] = "Tip: "
+        ["tip_prefix"] = "Tip: ",
+        ["debug_mode_on"] = "Debug mode on.",
+        ["debug_mode_off"] = "Debug mode off.",
+        ["menu_position_on"] = "Menu position announcements on.",
+        ["menu_position_off"] = "Menu position announcements off.",
+        ["role_slider"] = "slider",
+        ["menu_position_suffix"] = "{0} of {1}"
     };
 
     private static readonly Dictionary<string, string> _jp = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["mod_loaded"] = "パステルパレード アクセシビリティMODを読み込みました。",
-        ["tip_prefix"] = "ヒント: "
+        ["tip_prefix"] = "ヒント: ",
+        ["debug_mode_on"] = "デバッグモードをオンにしました。",
+        ["debug_mode_off"] = "デバッグモードをオフにしました。",
+        ["menu_position_on"] = "メニュー位置読み上げをオンにしました。",
+        ["menu_position_off"] = "メニュー位置読み上げをオフにしました。",
+        ["role_slider"] = "スライダー",
+        ["menu_position_suffix"] = "{1}中{0}"
     };
 
     private static readonly Dictionary<string, string> _zhCn = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["mod_loaded"] = "Pastel Parade 无障碍模组已加载。",
-        ["tip_prefix"] = "提示："
+        ["tip_prefix"] = "提示：",
+        ["debug_mode_on"] = "调试模式已开启。",
+        ["debug_mode_off"] = "调试模式已关闭。",
+        ["menu_position_on"] = "菜单位置播报已开启。",
+        ["menu_position_off"] = "菜单位置播报已关闭。",
+        ["role_slider"] = "滑块",
+        ["menu_position_suffix"] = "第{0}项，共{1}项"
     };
 
     private static readonly Dictionary<string, string> _zhTw = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["mod_loaded"] = "Pastel Parade 無障礙模組已載入。",
-        ["tip_prefix"] = "提示："
+        ["tip_prefix"] = "提示：",
+        ["debug_mode_on"] = "除錯模式已開啟。",
+        ["debug_mode_off"] = "除錯模式已關閉。",
+        ["menu_position_on"] = "選單位置播報已開啟。",
+        ["menu_position_off"] = "選單位置播報已關閉。",
+        ["role_slider"] = "滑桿",
+        ["menu_position_suffix"] = "第{0}項，共{1}項"
     };
 
     private static string _currentLanguage = "en";

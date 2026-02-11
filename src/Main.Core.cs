@@ -120,6 +120,9 @@ public partial class Main : MelonMod
 	// 只有「真的有開關的設定頁」才允許 0/1 fallback（音訊/顯示）；校準介面不該出現 0/1
 	// 先前用來限制 0/1 fallback 的旗標，已改成用「元件本身是否為 toggle」決定，保留會造成誤用與警告
 
+	private bool _debugModeEnabled;
+	private bool _menuPositionAnnouncementsEnabled;
+
 	public static Main Instance { get; private set; }
 
 	private string outDir => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tolk");
@@ -162,6 +165,10 @@ public partial class Main : MelonMod
 		Instance = this;
 		Directory.CreateDirectory(outDir);
 		Loc.Initialize();
+		ModConfig.Initialize();
+		_debugModeEnabled = ModConfig.DebugModeEnabled;
+		_menuPositionAnnouncementsEnabled = ModConfig.MenuPositionAnnouncementsEnabled;
+		DebugLogger.SetEnabled(_debugModeEnabled);
 
 		// Debug flow: startup window
 		try
@@ -213,6 +220,7 @@ public partial class Main : MelonMod
 		try
 		{
 			if (_isQuitting) return;
+			ProcessRuntimeHotkeys();
 
 			FlushDelayedDialogBodies();
 
@@ -422,6 +430,90 @@ public partial class Main : MelonMod
 		{
 			MelonLogger.Warning("TolkExporter: OnUpdate exception: " + ex);
 		}
+	}
+
+	private void ProcessRuntimeHotkeys()
+	{
+		try
+		{
+			if (IsHotkeyPressedThisFrame("F12", "f12Key"))
+				ToggleDebugMode();
+
+			if (IsHotkeyPressedThisFrame("F3", "f3Key"))
+				ToggleMenuPositionAnnouncements();
+		}
+		catch
+		{
+		}
+	}
+
+	private void ToggleDebugMode()
+	{
+		try
+		{
+			_debugModeEnabled = !_debugModeEnabled;
+			ModConfig.SetDebugMode(_debugModeEnabled);
+			DebugLogger.SetEnabled(_debugModeEnabled);
+			SendToTolkPriority(Loc.Get(_debugModeEnabled ? "debug_mode_on" : "debug_mode_off"));
+		}
+		catch
+		{
+		}
+	}
+
+	private void ToggleMenuPositionAnnouncements()
+	{
+		try
+		{
+			_menuPositionAnnouncementsEnabled = !_menuPositionAnnouncementsEnabled;
+			ModConfig.SetMenuPositionAnnouncements(_menuPositionAnnouncementsEnabled);
+			SendToTolkPriority(Loc.Get(_menuPositionAnnouncementsEnabled ? "menu_position_on" : "menu_position_off"));
+		}
+		catch
+		{
+		}
+	}
+
+	private static bool IsHotkeyPressedThisFrame(string keyCodeName, string keyboardKeyPropertyName)
+	{
+		return IsLegacyKeyDown(keyCodeName) || IsInputSystemKeyPressedThisFrame(keyboardKeyPropertyName);
+	}
+
+	private static bool IsLegacyKeyDown(string keyCodeName)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(keyCodeName)) return false;
+			var inputType = Type.GetType("UnityEngine.Input, UnityEngine.InputLegacyModule") ?? Type.GetType("UnityEngine.Input");
+			var keyCodeType = Type.GetType("UnityEngine.KeyCode, UnityEngine.CoreModule") ?? Type.GetType("UnityEngine.KeyCode");
+			if (inputType == null || keyCodeType == null) return false;
+			var m = inputType.GetMethod("GetKeyDown", BindingFlags.Static | BindingFlags.Public, null, new[] { keyCodeType }, null);
+			if (m == null) return false;
+			var kc = Enum.Parse(keyCodeType, keyCodeName, ignoreCase: true);
+			var v = m.Invoke(null, new[] { kc });
+			return v is bool b && b;
+		}
+		catch { return false; }
+	}
+
+	private static bool IsInputSystemKeyPressedThisFrame(string keyboardKeyPropertyName)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(keyboardKeyPropertyName)) return false;
+			var keyboardType = Type.GetType("UnityEngine.InputSystem.Keyboard, Unity.InputSystem");
+			if (keyboardType == null) return false;
+			var pCurrent = keyboardType.GetProperty("current", BindingFlags.Static | BindingFlags.Public);
+			var keyboard = pCurrent?.GetValue(null);
+			if (keyboard == null) return false;
+			var pKey = keyboard.GetType().GetProperty(keyboardKeyPropertyName, BindingFlags.Instance | BindingFlags.Public);
+			var key = pKey?.GetValue(keyboard);
+			if (key == null) return false;
+			var pPressed = key.GetType().GetProperty("wasPressedThisFrame", BindingFlags.Instance | BindingFlags.Public);
+			var v = pPressed?.GetValue(key);
+			return v is bool b && b;
+		}
+		catch { return false; }
 	}
 
 	private void FlushDelayedDialogBodies()
@@ -1296,6 +1388,12 @@ public partial class Main : MelonMod
 
 			finalText = NormalizeOutputText(finalText);
 			if (string.IsNullOrWhiteSpace(finalText)) return;
+			if (_menuPositionAnnouncementsEnabled)
+			{
+				var suffix = TryBuildMenuPositionSuffix(val);
+				if (!string.IsNullOrWhiteSpace(suffix))
+					finalText = NormalizeOutputText(finalText + " " + suffix);
+			}
 
 			// 刪除存檔等確認對話框：焦點只在 YES/NO，正文不會自動被選到。
 			// 這裡在唸 YES/NO 時，從同一個父容器抓出「非按鈕」文字並合併朗讀。
@@ -2363,6 +2461,140 @@ public partial class Main : MelonMod
 		catch { return null; }
 	}
 
+	private static string TryBuildMenuPositionSuffix(object selectedGameObject)
+	{
+		try
+		{
+			if (selectedGameObject == null) return null;
+			Type selectableType = Type.GetType("UnityEngine.UI.Selectable, UnityEngine.UI")
+			                    ?? Type.GetType("UnityEngine.UI.Selectable");
+			if (selectableType == null) return null;
+
+			object selectedSelectable = TryGetComponent(selectedGameObject, selectableType)
+			                       ?? FindComponentInParents(selectedGameObject, selectableType, 8);
+			if (selectedSelectable == null) return null;
+
+			object selectedSelectableGo = selectedSelectable.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(selectedSelectable);
+			if (selectedSelectableGo == null) return null;
+			int selectedId = 0;
+			try
+			{
+				selectedId = (int)selectedSelectable.GetType().GetMethod("GetInstanceID", BindingFlags.Instance | BindingFlags.Public)?.Invoke(selectedSelectable, null);
+			}
+			catch { selectedId = 0; }
+			if (selectedId == 0) return null;
+
+			var candidates = new List<(int id, float x, float y)>();
+			var seen = new HashSet<int>();
+
+			object rootGo = selectedSelectableGo;
+			for (int depth = 0; depth < 9; depth++)
+			{
+				candidates.Clear();
+				seen.Clear();
+
+				var mi = rootGo.GetType().GetMethod("GetComponentsInChildren", new[] { typeof(Type), typeof(bool) });
+				var arr = mi?.Invoke(rootGo, new object[] { selectableType, true }) as Array;
+				if (arr != null)
+				{
+					for (int i = 0; i < arr.Length; i++)
+					{
+						var comp = arr.GetValue(i);
+						if (comp == null) continue;
+
+						try
+						{
+							int id = (int)comp.GetType().GetMethod("GetInstanceID", BindingFlags.Instance | BindingFlags.Public)?.Invoke(comp, null);
+							if (id == 0 || !seen.Add(id)) continue;
+
+							var go = comp.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(comp);
+							if (go == null) continue;
+							var aih = go.GetType().GetProperty("activeInHierarchy", BindingFlags.Instance | BindingFlags.Public)?.GetValue(go);
+							if (aih is bool activeInHierarchy && !activeInHierarchy) continue;
+
+							var pInteractable = comp.GetType().GetProperty("interactable", BindingFlags.Instance | BindingFlags.Public);
+							if (pInteractable != null)
+							{
+								var interactableObj = pInteractable.GetValue(comp);
+								if (interactableObj is bool interactable && !interactable) continue;
+							}
+
+							float x = 0f;
+							float y = 0f;
+							try
+							{
+								var tr = go.GetType().GetProperty("transform", BindingFlags.Instance | BindingFlags.Public)?.GetValue(go);
+								var pos = tr?.GetType().GetProperty("position", BindingFlags.Instance | BindingFlags.Public)?.GetValue(tr);
+								if (pos != null)
+								{
+									x = Convert.ToSingle(pos.GetType().GetField("x")?.GetValue(pos) ?? 0f);
+									y = Convert.ToSingle(pos.GetType().GetField("y")?.GetValue(pos) ?? 0f);
+								}
+							}
+							catch { }
+
+							candidates.Add((id, x, y));
+						}
+						catch { }
+					}
+				}
+
+				if (candidates.Count >= 2 && candidates.Count <= 40)
+				{
+					bool hasSelected = false;
+					for (int i = 0; i < candidates.Count; i++)
+					{
+						if (candidates[i].id == selectedId)
+						{
+							hasSelected = true;
+							break;
+						}
+					}
+
+					if (hasSelected)
+					{
+						candidates.Sort((a, b) =>
+						{
+							int cy = (-a.y).CompareTo(-b.y);
+							if (cy != 0) return cy;
+							return a.x.CompareTo(b.x);
+						});
+
+						int pos = -1;
+						for (int i = 0; i < candidates.Count; i++)
+						{
+							if (candidates[i].id == selectedId)
+							{
+								pos = i + 1;
+								break;
+							}
+						}
+						if (pos <= 0) return null;
+
+						string fmt = Loc.Get("menu_position_suffix");
+						try
+						{
+							return string.Format(fmt, pos, candidates.Count);
+						}
+						catch
+						{
+							return pos + " of " + candidates.Count;
+						}
+					}
+				}
+
+				var parentTr = TryGetParentTransform(rootGo);
+				var parentGo = parentTr?.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(parentTr);
+				if (parentGo == null) break;
+				rootGo = parentGo;
+			}
+		}
+		catch
+		{
+		}
+		return null;
+	}
+
 	private static object TryGetComponent(object gameObject, Type componentType)
 	{
 		try
@@ -2372,6 +2604,26 @@ public partial class Main : MelonMod
 			return mi?.Invoke(gameObject, new object[] { componentType });
 		}
 		catch { return null; }
+	}
+
+	private static object FindComponentInParents(object gameObject, Type componentType, int maxDepth)
+	{
+		try
+		{
+			if (gameObject == null || componentType == null) return null;
+			object curGo = gameObject;
+			for (int i = 0; i < maxDepth; i++)
+			{
+				var comp = TryGetComponent(curGo, componentType);
+				if (comp != null) return comp;
+				var tr = curGo.GetType().GetProperty("transform", BindingFlags.Instance | BindingFlags.Public)?.GetValue(curGo);
+				var parentTr = tr?.GetType().GetProperty("parent", BindingFlags.Instance | BindingFlags.Public)?.GetValue(tr);
+				curGo = parentTr?.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(parentTr);
+				if (curGo == null) break;
+			}
+		}
+		catch { }
+		return null;
 	}
 
 	private static List<object> GetComponentsInChildrenList(object gameObject)
