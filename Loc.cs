@@ -19,7 +19,16 @@ public static class Loc
         ["menu_position_on"] = "Menu position announcements on.",
         ["menu_position_off"] = "Menu position announcements off.",
         ["role_slider"] = "slider",
-        ["menu_position_suffix"] = "{0} of {1}"
+        ["menu_position_suffix"] = "{0} of {1}",
+        ["settings_tab_sound"] = "Sound",
+        ["settings_tab_display"] = "Display",
+        ["settings_tab_with_position"] = "{0} tab {1} of {2}",
+        ["settings_tab_without_position"] = "{0} tab",
+        ["offset_slider_label"] = "Offset",
+        ["ui_back"] = "Back",
+        ["ui_unknown_item"] = "Item",
+        ["hub_music_preview"] = "Music Preview",
+        ["ui_fullscreen"] = "Fullscreen"
     };
 
     private static readonly Dictionary<string, string> _jp = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -31,7 +40,16 @@ public static class Loc
         ["menu_position_on"] = "メニュー位置読み上げをオンにしました。",
         ["menu_position_off"] = "メニュー位置読み上げをオフにしました。",
         ["role_slider"] = "スライダー",
-        ["menu_position_suffix"] = "{1}中{0}"
+        ["menu_position_suffix"] = "{1}中{0}",
+        ["settings_tab_sound"] = "サウンド",
+        ["settings_tab_display"] = "表示",
+        ["settings_tab_with_position"] = "{0}タブ {1}/{2}",
+        ["settings_tab_without_position"] = "{0}タブ",
+        ["offset_slider_label"] = "オフセット",
+        ["ui_back"] = "戻る",
+        ["ui_unknown_item"] = "項目",
+        ["hub_music_preview"] = "音楽プレビュー",
+        ["ui_fullscreen"] = "フルスクリーン"
     };
 
     private static readonly Dictionary<string, string> _zhCn = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -43,7 +61,16 @@ public static class Loc
         ["menu_position_on"] = "菜单位置播报已开启。",
         ["menu_position_off"] = "菜单位置播报已关闭。",
         ["role_slider"] = "滑块",
-        ["menu_position_suffix"] = "第{0}项，共{1}项"
+        ["menu_position_suffix"] = "第{0}项，共{1}项",
+        ["settings_tab_sound"] = "声音",
+        ["settings_tab_display"] = "显示",
+        ["settings_tab_with_position"] = "{0}选项卡 第{1}项，共{2}项",
+        ["settings_tab_without_position"] = "{0}选项卡",
+        ["offset_slider_label"] = "偏移",
+        ["ui_back"] = "返回",
+        ["ui_unknown_item"] = "项目",
+        ["hub_music_preview"] = "音乐预览",
+        ["ui_fullscreen"] = "全屏"
     };
 
     private static readonly Dictionary<string, string> _zhTw = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -55,7 +82,16 @@ public static class Loc
         ["menu_position_on"] = "選單位置播報已開啟。",
         ["menu_position_off"] = "選單位置播報已關閉。",
         ["role_slider"] = "滑桿",
-        ["menu_position_suffix"] = "第{0}項，共{1}項"
+        ["menu_position_suffix"] = "第{0}項，共{1}項",
+        ["settings_tab_sound"] = "聲音",
+        ["settings_tab_display"] = "顯示",
+        ["settings_tab_with_position"] = "{0}分頁 第{1}項，共{2}項",
+        ["settings_tab_without_position"] = "{0}分頁",
+        ["offset_slider_label"] = "偏移",
+        ["ui_back"] = "返回",
+        ["ui_unknown_item"] = "項目",
+        ["hub_music_preview"] = "音樂預覽",
+        ["ui_fullscreen"] = "全螢幕"
     };
 
     private static string _currentLanguage = "en";

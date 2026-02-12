@@ -80,6 +80,7 @@ public partial class Main : MelonMod
 	private DateTime _ignoreSliderChangesUntil = DateTime.MinValue;
 	private object _pendingSliderGo;
 	private DateTime _pendingSliderSpeakAt = DateTime.MinValue;
+	private bool _pendingSliderValueOnly;
 	private object _pendingToggleGo;
 	private DateTime _pendingToggleSpeakAt = DateTime.MinValue;
 	private string _lastSliderSpokenText;
@@ -108,6 +109,8 @@ public partial class Main : MelonMod
 	private DateTime _suppressSelectionUntil = DateTime.MinValue;
 	private string _pendingSelectionPrefix;
 	private DateTime _pendingSelectionPrefixUntil = DateTime.MinValue;
+	private string _lastMergedActionText;
+	private DateTime _lastMergedActionAt = DateTime.MinValue;
 
 	private readonly ConcurrentQueue<string> _speechQueue = new ConcurrentQueue<string>();
 	private readonly AutoResetEvent _speechEvent = new AutoResetEvent(false);
@@ -375,11 +378,13 @@ public partial class Main : MelonMod
 				var now = DateTime.Now;
 				_pendingSliderSpeakAt = DateTime.MinValue;
 				var go = _pendingSliderGo;
+				var valueOnly = _pendingSliderValueOnly;
 				_pendingSliderGo = null;
+				_pendingSliderValueOnly = false;
 
 				// 節流：拖曳時避免太密（但不能到 1 秒那麼慢）
 				if ((now - _lastSliderSpokenAt).TotalMilliseconds < 70) return;
-				ReadSelectionAndSpeak(go);
+				ReadSelectionAndSpeak(go, sliderValueOnly: valueOnly);
 				if (!string.IsNullOrWhiteSpace(_lastSentText) && !string.Equals(_lastSliderSpokenText, _lastSentText, StringComparison.Ordinal))
 				{
 					_lastSliderSpokenText = _lastSentText;
@@ -477,6 +482,90 @@ public partial class Main : MelonMod
 		catch
 		{
 		}
+	}
+
+	internal bool IsMenuPositionAnnouncementsEnabled => _menuPositionAnnouncementsEnabled;
+
+	internal void OnSettingsTabStateEntered(string stateTypeName)
+	{
+		try
+		{
+			if (_isQuitting) return;
+			if (string.IsNullOrWhiteSpace(stateTypeName)) return;
+
+			string tabName = null;
+			int tabIndex = 0;
+			const int tabTotal = 2;
+
+			if (string.Equals(stateTypeName, "PastelParade.UISoundSettingsState", StringComparison.Ordinal))
+			{
+				tabName = Loc.Get("settings_tab_sound");
+				tabIndex = 1;
+			}
+			else if (string.Equals(stateTypeName, "PastelParade.UIDisplaySettings", StringComparison.Ordinal))
+			{
+				tabName = Loc.Get("settings_tab_display");
+				tabIndex = 2;
+			}
+
+			if (string.IsNullOrWhiteSpace(tabName) || tabIndex <= 0) return;
+
+			string prefix = BuildSettingsTabPrefix(tabName, tabIndex, tabTotal);
+			if (string.IsNullOrWhiteSpace(prefix)) return;
+
+			QueueSelectionPrefix(prefix, 1800);
+		}
+		catch
+		{
+		}
+	}
+
+	private string BuildSettingsTabPrefix(string tabName, int tabIndex, int tabTotal)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(tabName) || tabIndex <= 0 || tabTotal <= 0) return null;
+			if (_menuPositionAnnouncementsEnabled)
+			{
+				string fmt = Loc.Get("settings_tab_with_position");
+				try { return NormalizeOutputText(string.Format(fmt, tabName, tabIndex, tabTotal)); }
+				catch { return NormalizeOutputText(tabName + " tab " + tabIndex + " of " + tabTotal); }
+			}
+			string fmtNoPos = Loc.Get("settings_tab_without_position");
+			try { return NormalizeOutputText(string.Format(fmtNoPos, tabName)); }
+			catch { return NormalizeOutputText(tabName + " tab"); }
+		}
+		catch { return null; }
+	}
+
+	private string NormalizeTabTitleForAnnouncement(string tabTitle)
+	{
+		try
+		{
+			tabTitle = NormalizeOutputText(tabTitle);
+			if (string.IsNullOrWhiteSpace(tabTitle)) return tabTitle;
+
+			if (LooksLikeSoundTabTitle(tabTitle))
+				return BuildSettingsTabPrefix(Loc.Get("settings_tab_sound"), 1, 2) ?? tabTitle;
+			if (LooksLikeDisplayTabTitle(tabTitle))
+				return BuildSettingsTabPrefix(Loc.Get("settings_tab_display"), 2, 2) ?? tabTitle;
+		}
+		catch { }
+		return tabTitle;
+	}
+
+	private static bool LooksLikeSoundTabTitle(string tabTitle)
+	{
+		if (string.IsNullOrWhiteSpace(tabTitle)) return false;
+		string t = tabTitle.Trim().ToLowerInvariant();
+		return t == "audio" || t == "sound" || t == "サウンド" || t == "聲音" || t == "声音";
+	}
+
+	private static bool LooksLikeDisplayTabTitle(string tabTitle)
+	{
+		if (string.IsNullOrWhiteSpace(tabTitle)) return false;
+		string t = tabTitle.Trim().ToLowerInvariant();
+		return t == "display" || t == "表示" || t == "顯示" || t == "显示";
 	}
 
 	private static bool IsHotkeyPressedThisFrame(string keyCodeName, string keyboardKeyPropertyName)
@@ -990,7 +1079,7 @@ public partial class Main : MelonMod
 		return null;
 	}
 
-	private void ReadSelectionAndSpeak(object selectedGameObject)
+	private void ReadSelectionAndSpeak(object selectedGameObject, bool sliderValueOnly = false)
 	{
 		try
 		{
@@ -1385,7 +1474,14 @@ public partial class Main : MelonMod
 				return;
 
 			string finalText = text;
-			if (isSliderSelection)
+			if (isSliderSelection && sliderValueOnly)
+			{
+				if (!string.IsNullOrWhiteSpace(text))
+					finalText = text.Trim();
+				else if (!string.IsNullOrWhiteSpace(text2))
+					finalText = text2.Trim();
+			}
+			else if (isSliderSelection)
 			{
 				string sliderRole = Loc.Get("role_slider");
 				if (string.IsNullOrWhiteSpace(sliderRole)) sliderRole = "slider";
@@ -1578,8 +1674,14 @@ public partial class Main : MelonMod
 			}
 			catch { }
 
+			finalText = LocalizeKnownAnnouncementText(finalText);
+			finalText = AdaptTimingSelectionText(finalText);
 			finalText = TryMergePendingSelectionPrefix(finalText);
 			if (string.IsNullOrWhiteSpace(finalText)) return;
+			if (!string.IsNullOrWhiteSpace(_lastMergedActionText) &&
+			    string.Equals(finalText, _lastMergedActionText, StringComparison.Ordinal) &&
+			    (DateTime.Now - _lastMergedActionAt).TotalMilliseconds < 1200)
+				return;
 
 			try
 			{
@@ -1589,6 +1691,9 @@ public partial class Main : MelonMod
 				// Fast global text de-dupe (different targets can transiently emit same text during rebuilds).
 				if (string.Equals(_lastSelectionSpokenText, finalText, StringComparison.Ordinal) &&
 				    (nowSelection - _lastSelectionSpokenAt).TotalMilliseconds < 350)
+					return;
+				if (string.Equals(finalText, Loc.Get("ui_unknown_item"), StringComparison.Ordinal) &&
+				    (nowSelection - _lastSelectionSpokenAt).TotalMilliseconds < 1000)
 					return;
 
 				// Strong de-dupe for same target to prevent repeated "Start/Settings/Close" spam.
@@ -1640,12 +1745,204 @@ public partial class Main : MelonMod
 
 			if (string.IsNullOrWhiteSpace(prefix)) return selectionText;
 			if (string.Equals(prefix, action, StringComparison.OrdinalIgnoreCase)) return selectionText;
+			_lastMergedActionText = action;
+			_lastMergedActionAt = DateTime.Now;
 			return NormalizeOutputText(prefix + " " + action);
 		}
 		catch
 		{
 			return selectionText;
 		}
+	}
+
+	private string LocalizeKnownAnnouncementText(string text)
+	{
+		try
+		{
+			text = NormalizeOutputText(text);
+			if (string.IsNullOrWhiteSpace(text)) return text;
+
+			if (TryReplaceLeadingToken(ref text, "もどる", Loc.Get("ui_back"))) { }
+			else if (TryReplaceLeadingToken(ref text, "戻る", Loc.Get("ui_back"))) { }
+			else if (TryReplaceLeadingToken(ref text, "Sound Check", Loc.Get("hub_music_preview"))) { }
+			else if (TryReplaceLeadingToken(ref text, "フルスクリーン", Loc.Get("ui_fullscreen"))) { }
+			else if (string.Equals(text, "テキスト", StringComparison.Ordinal))
+			{
+				text = Loc.Get("ui_unknown_item");
+			}
+
+			if (_menuPositionAnnouncementsEnabled && TryGetLeadingTokenAndTail(text, out var leadingToken, out _))
+			{
+				bool isClose = string.Equals(leadingToken, "Close", StringComparison.OrdinalIgnoreCase);
+				if (isClose)
+				{
+					int total = 0;
+					if (Patches.IsSoundSettingsStateActive()) total = 5;
+					else if (Patches.IsDisplaySettingsStateActive()) total = 9;
+					else if (Patches.IsTimingSettingStateActive()) total = 5;
+					if (total > 0)
+					{
+						text = leadingToken + " " + FormatMenuPosition(total, total);
+					}
+				}
+			}
+
+			return NormalizeOutputText(text);
+		}
+		catch
+		{
+			return text;
+		}
+	}
+
+	private string AdaptTimingSelectionText(string text)
+	{
+		try
+		{
+			if (!Patches.IsTimingSettingStateActive()) return text;
+			if (string.IsNullOrWhiteSpace(text)) return text;
+
+			if (!TryGetLeadingTokenAndTail(text, out var leadingToken, out var tail)) return text;
+			if (string.Equals(leadingToken, "Test", StringComparison.OrdinalIgnoreCase) ||
+			    string.Equals(leadingToken, "テスト", StringComparison.Ordinal))
+			{
+				string spoken = BuildOffsetSliderAnnouncement(tail);
+				if (!string.IsNullOrWhiteSpace(spoken))
+					return spoken;
+			}
+
+			return text;
+		}
+		catch
+		{
+			return text;
+		}
+	}
+
+	private string BuildOffsetSliderAnnouncement(string trailingSuffix = null)
+	{
+		try
+		{
+			string value = TryGetTimingCalibrationTmpText();
+			if (string.IsNullOrWhiteSpace(value)) return null;
+
+			string label = Loc.Get("offset_slider_label");
+			if (string.IsNullOrWhiteSpace(label)) label = "Offset";
+			string role = Loc.Get("role_slider");
+			if (string.IsNullOrWhiteSpace(role)) role = "slider";
+
+			string spoken = NormalizeOutputText(label + " " + role + " " + value);
+			if (string.IsNullOrWhiteSpace(spoken)) return null;
+			if (!string.IsNullOrWhiteSpace(trailingSuffix))
+				spoken = NormalizeOutputText(spoken + " " + trailingSuffix.Trim());
+			return spoken;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	internal void AnnounceTimingOffsetSliderValue()
+	{
+		try
+		{
+			if (_isQuitting) return;
+			string spoken = BuildOffsetSliderAnnouncement();
+			if (string.IsNullOrWhiteSpace(spoken)) return;
+			SendToTolk(spoken);
+		}
+		catch
+		{
+		}
+	}
+
+	private static bool TryGetLeadingTokenAndTail(string text, out string leadingToken, out string tail)
+	{
+		leadingToken = null;
+		tail = null;
+		try
+		{
+			if (string.IsNullOrWhiteSpace(text)) return false;
+			text = text.Trim();
+			int sp = text.IndexOf(' ');
+			if (sp < 0)
+			{
+				leadingToken = text;
+				tail = "";
+				return true;
+			}
+			leadingToken = text.Substring(0, sp).Trim();
+			tail = text.Substring(sp + 1).Trim();
+			return !string.IsNullOrWhiteSpace(leadingToken);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool TryReplaceLeadingToken(ref string text, string token, string replacement)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(replacement))
+				return false;
+			if (string.Equals(text, token, StringComparison.Ordinal))
+			{
+				text = replacement;
+				return true;
+			}
+			if (text.StartsWith(token + " ", StringComparison.Ordinal))
+			{
+				text = replacement + text.Substring(token.Length);
+				return true;
+			}
+		}
+		catch
+		{
+		}
+		return false;
+	}
+
+	private static string FormatMenuPosition(int pos, int total)
+	{
+		try
+		{
+			string fmt = Loc.Get("menu_position_suffix");
+			return string.Format(fmt, pos, total);
+		}
+		catch
+		{
+			return pos + " of " + total;
+		}
+	}
+
+	private static bool IsComponentActiveForTextScan(object component)
+	{
+		try
+		{
+			if (component == null) return false;
+			var pEnabled = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
+			if (pEnabled != null)
+			{
+				var enObj = pEnabled.GetValue(component);
+				if (enObj is bool en && !en) return false;
+			}
+
+			var go = component.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(component);
+			if (go != null)
+			{
+				var pAih = go.GetType().GetProperty("activeInHierarchy", BindingFlags.Instance | BindingFlags.Public);
+				if (pAih != null)
+				{
+					var aihObj = pAih.GetValue(go);
+					if (aihObj is bool aih && !aih) return false;
+				}
+			}
+			return true;
+		}
+		catch { return true; }
 	}
 
 	private List<string> EnumerateTextStrings(object gameObject)
@@ -1667,6 +1964,7 @@ public partial class Main : MelonMod
 					foreach (var o in arr)
 					{
 						if (o == null) continue;
+						if (!IsComponentActiveForTextScan(o)) continue;
 						string s = o.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public)?.GetValue(o) as string;
 						if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
 					}
@@ -1680,6 +1978,7 @@ public partial class Main : MelonMod
 					foreach (var o in arr)
 					{
 						if (o == null) continue;
+						if (!IsComponentActiveForTextScan(o)) continue;
 						string s = o.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(o) as string;
 						if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
 					}
@@ -1820,6 +2119,7 @@ public partial class Main : MelonMod
 		{
 			if (_isQuitting) return;
 			tabTitle = NormalizeOutputText(tabTitle);
+			tabTitle = NormalizeTabTitleForAnnouncement(tabTitle);
 			if (string.IsNullOrWhiteSpace(tabTitle)) return;
 			_pendingTabTitle = tabTitle;
 			_pendingTabFocus = null;
@@ -2064,7 +2364,7 @@ public partial class Main : MelonMod
 	{
 		if (_isQuitting) return;
 		// 進入設定頁時，slider 會先被程式設值一輪；先忽略短時間，避免初始化就亂唸。
-		_ignoreSliderChangesUntil = DateTime.Now.AddMilliseconds(80);
+		_ignoreSliderChangesUntil = DateTime.Now.AddMilliseconds(fromRebuild ? 300 : 1200);
 
 		_pendingCategoryContext = stateInstance;
 		_pendingCategoryLastCandidate = null;
@@ -2126,6 +2426,7 @@ public partial class Main : MelonMod
 
 			// 延到下一個 update：確保 _seText/_bgmText/_scaleText 等顯示文字已更新
 			_pendingSliderGo = sliderGo;
+			_pendingSliderValueOnly = true;
 			_pendingSliderSpeakAt = DateTime.Now.AddMilliseconds(1);
 		}
 		catch { }
@@ -2607,12 +2908,14 @@ public partial class Main : MelonMod
 
 			var candidates = new List<(int id, float x, float y)>();
 			var seen = new HashSet<int>();
+			bool inSettingsState = Patches.IsAnySettingsStateActive();
 
 			object rootGo = selectedSelectableGo;
 			for (int depth = 0; depth < 9; depth++)
 			{
 				candidates.Clear();
 				seen.Clear();
+				var previewSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 				var mi = rootGo.GetType().GetMethod("GetComponentsInChildren", new[] { typeof(Type), typeof(bool) });
 				var arr = mi?.Invoke(rootGo, new object[] { selectableType, true }) as Array;
@@ -2639,6 +2942,11 @@ public partial class Main : MelonMod
 								var interactableObj = pInteractable.GetValue(comp);
 								if (interactableObj is bool interactable && !interactable) continue;
 							}
+
+							string preview = GetSelectablePreviewText(go);
+							if (string.IsNullOrWhiteSpace(preview)) continue;
+							if (inSettingsState && LooksLikeSettingsTabTitle(preview)) continue;
+							if (inSettingsState && id != selectedId && !previewSeen.Add(preview)) continue;
 
 							float x = 0f;
 							float y = 0f;
@@ -2714,6 +3022,68 @@ public partial class Main : MelonMod
 		{
 		}
 		return null;
+	}
+
+	private static string GetSelectablePreviewText(object selectableGo)
+	{
+		try
+		{
+			if (selectableGo == null) return null;
+			Type tmpType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro") ?? Type.GetType("TMPro.TMP_Text");
+			Type uiTextType = Type.GetType("UnityEngine.UI.Text, UnityEngine.UI");
+
+			string PickFromArray(Array arr)
+			{
+				try
+				{
+					if (arr == null) return null;
+					for (int i = 0; i < arr.Length; i++)
+					{
+						var c = arr.GetValue(i);
+						if (c == null) continue;
+						if (!IsComponentActiveForTextScan(c)) continue;
+						string s = c.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(c) as string;
+						s = NormalizeOutputText(s);
+						if (!string.IsNullOrWhiteSpace(s)) return s;
+					}
+				}
+				catch { }
+				return null;
+			}
+
+			var mi = selectableGo.GetType().GetMethod("GetComponentsInChildren", new[] { typeof(Type), typeof(bool) });
+			if (mi == null) return null;
+
+			if (tmpType != null)
+			{
+				var arr = mi.Invoke(selectableGo, new object[] { tmpType, true }) as Array;
+				var s = PickFromArray(arr);
+				if (!string.IsNullOrWhiteSpace(s)) return s;
+			}
+			if (uiTextType != null)
+			{
+				var arr = mi.Invoke(selectableGo, new object[] { uiTextType, true }) as Array;
+				var s = PickFromArray(arr);
+				if (!string.IsNullOrWhiteSpace(s)) return s;
+			}
+		}
+		catch { }
+		return null;
+	}
+
+	private static bool LooksLikeSettingsTabTitle(string text)
+	{
+		try
+		{
+			text = NormalizeOutputText(text);
+			if (string.IsNullOrWhiteSpace(text)) return false;
+			string lower = text.ToLowerInvariant();
+			if (lower == "audio" || lower == "sound" || lower == "display") return true;
+			if (lower == "サウンド" || lower == "表示") return true;
+			if (lower == "聲音" || lower == "显示" || lower == "顯示") return true;
+		}
+		catch { }
+		return false;
 	}
 
 	private static object TryGetComponent(object gameObject, Type componentType)

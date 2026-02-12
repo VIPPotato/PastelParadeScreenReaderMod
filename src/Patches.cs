@@ -79,6 +79,7 @@ internal static partial class Patches
 	private static readonly HashSet<int> _settingsTmpTextIds = new HashSet<int>();
 	private static string _lastTimingHintText;
 	private static DateTime _lastTimingHintAt = DateTime.MinValue;
+	private static DateTime _lastTimingTestAnnouncedAt = DateTime.MinValue;
 	private static object _timingHintCaptureRootGo;
 	private static DateTime _timingHintCaptureUntil = DateTime.MinValue;
 	private static int _timingHintCaptureValueTextId;
@@ -334,6 +335,14 @@ internal static partial class Patches
 					{
 						val.Patch((MethodBase)mBegin, null, new HarmonyMethod(postBegin), null, null, null);
 						MelonLogger.Msg("TolkExporter: patched PastelParade.UITimingSettingState.OnStateBegin (timing slider speak)");
+					}
+
+					MethodInfo mUpdate = tTiming.GetMethod("UpdateTimingOffset", BindingFlags.Instance | BindingFlags.NonPublic);
+					MethodInfo postUpdate = typeof(Patches).GetMethod("UITimingSettingState_UpdateTimingOffset_Postfix", BindingFlags.Static | BindingFlags.NonPublic);
+					if (mUpdate != null && postUpdate != null)
+					{
+						val.Patch((MethodBase)mUpdate, null, new HarmonyMethod(postUpdate), null, null, null);
+						MelonLogger.Msg("TolkExporter: patched PastelParade.UITimingSettingState.UpdateTimingOffset");
 					}
 
 					MethodInfo mEnd = tTiming.GetMethod("OnStateEnd", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -886,6 +895,27 @@ internal static partial class Patches
 				MelonLogger.Warning("TolkExporter: patch TimingText.Set exception: " + exTimingText);
 			}
 
+			// Calibration test button: UITimingBar.MakeCopy is invoked by UITimingSettingState._timingButton submit.
+			// Announce current offset slider value once so pressing Test has deterministic spoken feedback.
+			try
+			{
+				Type tTimingBar = AccessTools.TypeByName("PastelParade.UITimingBar");
+				if (tTimingBar != null)
+				{
+					MethodInfo m = tTimingBar.GetMethod("MakeCopy", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					MethodInfo post = typeof(Patches).GetMethod("UITimingBar_MakeCopy_Postfix", BindingFlags.Static | BindingFlags.NonPublic);
+					if (m != null && post != null)
+					{
+						val.Patch((MethodBase)m, null, new HarmonyMethod(post), null, null, null);
+						MelonLogger.Msg("TolkExporter: patched PastelParade.UITimingBar.MakeCopy");
+					}
+				}
+			}
+			catch (Exception exTimingBar)
+			{
+				MelonLogger.Warning("TolkExporter: patch UITimingBar.MakeCopy exception: " + exTimingBar);
+			}
+
 			// Ending（Parade）字幕/名單：依原始碼 `Pastel☆Parade/ParadeCredit.cs`
 			// `ParadeCredit.InitializeAsync` 會在 CreditInDelay 後寫入 `_text.text`（字幕/名單）。
 			// 直接 patch 這個方法並用同樣 delay 排程朗讀，避免全域 set_text hook 造成劇情捲動變慢。
@@ -1340,7 +1370,7 @@ internal static partial class Patches
 			_lastGameVersionText = s;
 			_lastGameVersionAt = now;
 
-			Main.Instance?.SendToTolk(s);
+			Main.Instance?.QueueSelectionPrefix(s, 2500);
 		}
 		catch { }
 	}
@@ -1662,7 +1692,7 @@ internal static partial class Patches
 							// 翻頁合併輸出：先把焦點內容存起來，交給合併邏輯一次唸
 							if (Main.Instance?.IsTabMergePending == true)
 								Main.Instance?.SetPendingTabFocusText(stSpoken);
-							else
+							else if (Main.Instance?.IsMenuPositionAnnouncementsEnabled != true)
 								Main.Instance?.SendToTolk(stSpoken);
 						}
 						return;
@@ -1703,7 +1733,7 @@ internal static partial class Patches
 						{
 							if (Main.Instance?.IsTabMergePending == true)
 								Main.Instance?.SetPendingTabFocusText(nTitle);
-							else
+							else if (Main.Instance?.IsMenuPositionAnnouncementsEnabled != true)
 								Main.Instance?.SendToTolk(nTitle);
 						}
 						return;
@@ -1767,7 +1797,7 @@ internal static partial class Patches
 			if (string.IsNullOrWhiteSpace(spoken)) return;
 			if (Main.Instance?.IsTabMergePending == true)
 				Main.Instance?.SetPendingTabFocusText(spoken);
-			else
+			else if (Main.Instance?.IsMenuPositionAnnouncementsEnabled != true)
 				Main.Instance?.SendToTolk(spoken);
 		}
 		catch (Exception ex)
@@ -1843,7 +1873,7 @@ internal static partial class Patches
 			if (string.IsNullOrWhiteSpace(spoken)) return;
 			if (Main.Instance?.IsTabMergePending == true)
 				Main.Instance?.SetPendingTabFocusText(spoken);
-			else
+			else if (Main.Instance?.IsMenuPositionAnnouncementsEnabled != true)
 				Main.Instance?.SendToTolk(spoken);
 		}
 		catch (Exception ex)
@@ -2323,6 +2353,9 @@ internal static partial class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
+			string tn = __instance.GetType().FullName ?? "";
+			if (tn == "PastelParade.UISoundSettingsState" || tn == "PastelParade.UIDisplaySettings")
+				return;
 			// 每次「重建完成點」都重新啟動 pending window，讓後續 title set_text 可以被捕捉
 			Main.Instance?.RequestSpeakSettingsCategoryTitle(__instance, fromRebuild: true);
 		}
@@ -2334,13 +2367,24 @@ internal static partial class Patches
 		try
 		{
 			if (!AutoSpeakEnabled) return;
+			if (__instance == null) return;
+			string tn = __instance.GetType().FullName ?? "";
 			// 依遊戲原始碼，在進入設定頁時把「真正的 toggle 控制項」註冊成白名單：
 			// 只有這些才允許輸出 on/off，避免主選單/清單/行為按鈕被誤加狀態。
 			Main.Instance?.RegisterKnownSettingsToggles(__instance);
-			// 分類切換時，標題文字常在同一個 header 上「晚一點才更新」，
-			// 若用全場景掃描很容易唸到上一個分類。這裡把 state instance 交給 mod，
-			// 讓它以該 state 所在 Canvas 範圍做掃描，並等文字穩定後再唸。
-			Main.Instance?.RequestSpeakSettingsCategoryTitle(__instance);
+
+			// Settings tabs (sound/display): prefix should be merged with first focused item.
+			if (tn == "PastelParade.UISoundSettingsState" || tn == "PastelParade.UIDisplaySettings")
+			{
+				Main.Instance?.OnSettingsTabStateEntered(tn);
+			}
+			else
+			{
+				// 分類切換時，標題文字常在同一個 header 上「晚一點才更新」，
+				// 若用全場景掃描很容易唸到上一個分類。這裡把 state instance 交給 mod，
+				// 讓它以該 state 所在 Canvas 範圍做掃描，並等文字穩定後再唸。
+				Main.Instance?.RequestSpeakSettingsCategoryTitle(__instance);
+			}
 
 			// 設定頁的「群組/標題」很多是 Prefab + Localize 靜態文字，不一定會走 TMP_Text.set_text。
 			// 在畫面啟用後的短窗口內，用 heuristic 掃 TMP_Text，把 instanceId 加入 _settingsTmpTextIds。
@@ -2578,7 +2622,7 @@ internal static partial class Patches
 			}
 			if (!string.IsNullOrWhiteSpace(text5))
 			{
-				Main.Instance?.SpeakAndQueueSelectionPrefix(text5, 1400);
+				Main.Instance?.QueueSelectionPrefix(text5, 1600);
 			}
 		}
 		catch (Exception ex)
@@ -3061,11 +3105,32 @@ internal static partial class Patches
 		catch { return false; }
 	}
 
-	private static bool IsTimingSettingStateActive()
+	internal static bool IsTimingSettingStateActive()
+	{
+		return IsStateActive("PastelParade.UITimingSettingState");
+	}
+
+	internal static bool IsSoundSettingsStateActive()
+	{
+		return IsStateActive("PastelParade.UISoundSettingsState");
+	}
+
+	internal static bool IsDisplaySettingsStateActive()
+	{
+		return IsStateActive("PastelParade.UIDisplaySettings");
+	}
+
+	internal static bool IsAnySettingsStateActive()
+	{
+		return IsSoundSettingsStateActive() || IsDisplaySettingsStateActive() || IsTimingSettingStateActive();
+	}
+
+	private static bool IsStateActive(string typeName)
 	{
 		try
 		{
-			Type t = AccessTools.TypeByName("PastelParade.UITimingSettingState");
+			if (string.IsNullOrWhiteSpace(typeName)) return false;
+			Type t = AccessTools.TypeByName(typeName);
 			if (t == null) return false;
 			Array arr = FindUnityObjectsByType(t);
 			if (arr == null || arr.Length == 0) return false;
@@ -3233,6 +3298,27 @@ internal static partial class Patches
 			// 正確 hook：提示文字是 UI Prefab 內的 TMP，進場時會被啟用（OnEnable / SetActive），不是程式設字。
 			// 因此這裡只設定「短窗口」與「根範圍」，由 TMP_Text.OnEnable hook 實際朗讀。
 			BeginTimingHintCaptureWindow(timingText);
+		}
+		catch { }
+	}
+
+	private static void UITimingSettingState_UpdateTimingOffset_Postfix(object __instance, bool isUpper)
+	{
+		try
+		{
+			if (!AutoSpeakEnabled) return;
+			if (__instance == null) return;
+			object timingText = __instance.GetType().GetField("_timingText", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
+			string s = timingText?.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(timingText) as string;
+			s = NormalizeTimingValueForSpeech(s);
+			if (string.IsNullOrWhiteSpace(s)) return;
+
+			var now = DateTime.Now;
+			if (string.Equals(_lastTimingSettingText, s, StringComparison.Ordinal) && (now - _lastTimingSettingTextAt).TotalMilliseconds < 120)
+				return;
+			_lastTimingSettingText = s;
+			_lastTimingSettingTextAt = now;
+			Main.Instance?.SendToTolk(s);
 		}
 		catch { }
 	}
@@ -4915,6 +5001,23 @@ internal static partial class Patches
 		catch (Exception ex)
 		{
 			MelonLogger.Warning("TolkExporter: TimingText_Set_Postfix failed: " + ex);
+		}
+	}
+
+	private static void UITimingBar_MakeCopy_Postfix(object __instance)
+	{
+		try
+		{
+			if (!AutoSpeakEnabled) return;
+			var now = DateTime.Now;
+			if ((now - _lastTimingTestAnnouncedAt).TotalMilliseconds < 180)
+				return;
+			_lastTimingTestAnnouncedAt = now;
+			Main.Instance?.AnnounceTimingOffsetSliderValue();
+		}
+		catch (Exception ex)
+		{
+			MelonLogger.Warning("TolkExporter: UITimingBar_MakeCopy_Postfix failed: " + ex);
 		}
 	}
 
