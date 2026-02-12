@@ -492,6 +492,7 @@ public partial class Main : MelonMod
 		{
 			if (_isQuitting) return;
 			if (string.IsNullOrWhiteSpace(stateTypeName)) return;
+			ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 
 			string tabName = null;
 			int tabIndex = 0;
@@ -514,6 +515,26 @@ public partial class Main : MelonMod
 			if (string.IsNullOrWhiteSpace(prefix)) return;
 
 			QueueSelectionPrefix(prefix, 1800);
+		}
+		catch
+		{
+		}
+	}
+
+	internal void ClearPendingUiAnnouncements(bool clearSelectionPrefix = false)
+	{
+		try
+		{
+			_pendingSliderGo = null;
+			_pendingSliderSpeakAt = DateTime.MinValue;
+			_pendingSliderValueOnly = false;
+			_pendingToggleGo = null;
+			_pendingToggleSpeakAt = DateTime.MinValue;
+			if (clearSelectionPrefix)
+			{
+				_pendingSelectionPrefix = null;
+				_pendingSelectionPrefixUntil = DateTime.MinValue;
+			}
 		}
 		catch
 		{
@@ -1801,16 +1822,7 @@ public partial class Main : MelonMod
 		{
 			if (!Patches.IsTimingSettingStateActive()) return text;
 			if (string.IsNullOrWhiteSpace(text)) return text;
-
-			if (!TryGetLeadingTokenAndTail(text, out var leadingToken, out var tail)) return text;
-			if (string.Equals(leadingToken, "Test", StringComparison.OrdinalIgnoreCase) ||
-			    string.Equals(leadingToken, "テスト", StringComparison.Ordinal))
-			{
-				string spoken = BuildOffsetSliderAnnouncement(tail);
-				if (!string.IsNullOrWhiteSpace(spoken))
-					return spoken;
-			}
-
+			// Keep selection text unchanged in timing screen; submit feedback is handled by UITimingBar.MakeCopy hook.
 			return text;
 		}
 		catch
@@ -1843,12 +1855,34 @@ public partial class Main : MelonMod
 		}
 	}
 
+	private string BuildInputDelayAnnouncement(string trailingSuffix = null)
+	{
+		try
+		{
+			string value = TryGetTimingCalibrationTmpText();
+			if (string.IsNullOrWhiteSpace(value)) return null;
+
+			string label = Loc.Get("input_delay_label");
+			if (string.IsNullOrWhiteSpace(label)) label = "Input Delay";
+
+			string spoken = NormalizeOutputText(label + " " + value);
+			if (string.IsNullOrWhiteSpace(spoken)) return null;
+			if (!string.IsNullOrWhiteSpace(trailingSuffix))
+				spoken = NormalizeOutputText(spoken + " " + trailingSuffix.Trim());
+			return spoken;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
 	internal void AnnounceTimingOffsetSliderValue()
 	{
 		try
 		{
 			if (_isQuitting) return;
-			string spoken = BuildOffsetSliderAnnouncement();
+			string spoken = BuildInputDelayAnnouncement();
 			if (string.IsNullOrWhiteSpace(spoken)) return;
 			SendToTolk(spoken);
 		}
@@ -1993,17 +2027,7 @@ public partial class Main : MelonMod
 	{
 		try
 		{
-			Type type = Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.UI")
-			            ?? Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.CoreModule")
-			            ?? Type.GetType("UnityEngine.EventSystems.EventSystem");
-			object obj = null;
-			if (type != null)
-			{
-				object obj2 = type.GetProperty("current", BindingFlags.Static | BindingFlags.Public)?.GetValue(null);
-				if (obj2 != null)
-					obj = type.GetProperty("currentSelectedGameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(obj2);
-			}
-			ReadSelectionAndSpeak(obj);
+			ReadSelectionAndSpeak(TryGetCurrentSelectedGameObject());
 		}
 		catch { }
 	}
@@ -2403,16 +2427,7 @@ public partial class Main : MelonMod
 			var sliderGo = sliderComponent.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(sliderComponent);
 			if (sliderGo == null) return;
 
-			object selected = null;
-			try
-			{
-				Type esType = Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.UI")
-				             ?? Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.CoreModule")
-				             ?? Type.GetType("UnityEngine.EventSystems.EventSystem");
-				object es = esType?.GetProperty("current", BindingFlags.Static | BindingFlags.Public)?.GetValue(null);
-				selected = esType?.GetProperty("currentSelectedGameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(es);
-			}
-			catch { }
+			object selected = TryGetCurrentSelectedGameObject();
 			bool related = false;
 			if (selected != null)
 			{
@@ -2439,12 +2454,125 @@ public partial class Main : MelonMod
 			if (_isQuitting) return;
 			if (DateTime.Now < _ignoreSliderChangesUntil) return; // 共用：進頁初始化先略過
 			if (toggleComponent == null) return;
-			var toggleGo = toggleComponent.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(toggleComponent);
+			var toggleGo = ResolveToggleAnnouncementTarget(toggleComponent);
 			if (toggleGo == null) return;
+			toggleGo = PromoteToggleAnnouncementTarget(toggleGo) ?? toggleGo;
 			_pendingToggleGo = toggleGo;
-			_pendingToggleSpeakAt = DateTime.Now.AddMilliseconds(1);
+			_pendingToggleSpeakAt = DateTime.Now.AddMilliseconds(20);
 		}
 		catch { }
+	}
+
+	private static object TryGetCurrentSelectedGameObject()
+	{
+		try
+		{
+			Type esType = Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.UI")
+			             ?? Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.CoreModule")
+			             ?? Type.GetType("UnityEngine.EventSystems.EventSystem");
+			object es = esType?.GetProperty("current", BindingFlags.Static | BindingFlags.Public)?.GetValue(null);
+			return esType?.GetProperty("currentSelectedGameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(es);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static object ResolveToggleAnnouncementTarget(object toggleComponent)
+	{
+		try
+		{
+			object go = TryGetGameObjectFromComponentLike(toggleComponent);
+			if (go != null) return go;
+
+			string[] memberNames =
+			{
+				"Button", "_button", "button",
+				"Owner", "_owner", "owner",
+				"Target", "_target", "target",
+				"Parent", "_parent", "parent",
+				"ToggleButton", "_toggleButton"
+			};
+
+			Type t = toggleComponent.GetType();
+			for (int i = 0; i < memberNames.Length; i++)
+			{
+				string name = memberNames[i];
+				try
+				{
+					var p = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (p != null)
+					{
+						var v = p.GetValue(toggleComponent, null);
+						go = TryGetGameObjectFromComponentLike(v);
+						if (go != null) return go;
+					}
+				}
+				catch { }
+
+				try
+				{
+					var f = t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (f != null)
+					{
+						var v = f.GetValue(toggleComponent);
+						go = TryGetGameObjectFromComponentLike(v);
+						if (go != null) return go;
+					}
+				}
+				catch { }
+			}
+
+			return TryGetCurrentSelectedGameObject();
+		}
+		catch
+		{
+			return TryGetCurrentSelectedGameObject();
+		}
+	}
+
+	private static object TryGetGameObjectFromComponentLike(object componentLike)
+	{
+		try
+		{
+			if (componentLike == null) return null;
+			var pGo = componentLike.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+			if (pGo == null) return null;
+			return pGo.GetValue(componentLike, null);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static object PromoteToggleAnnouncementTarget(object go)
+	{
+		try
+		{
+			if (go == null) return null;
+
+			Type btnType = AccessTools.TypeByName("MornUGUI.MornUGUIButton");
+			if (btnType != null)
+			{
+				object btn = TryGetComponent(go, btnType) ?? FindComponentInParents(go, btnType, 8);
+				if (btn != null)
+					return btn.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(btn);
+			}
+
+			Type toggleType = Type.GetType("UnityEngine.UI.Toggle, UnityEngine.UI") ?? Type.GetType("UnityEngine.UI.Toggle");
+			if (toggleType != null)
+			{
+				object tog = TryGetComponent(go, toggleType) ?? FindComponentInParents(go, toggleType, 8);
+				if (tog != null)
+					return tog.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(tog);
+			}
+		}
+		catch
+		{
+		}
+		return go;
 	}
 
 	private static bool IsSameOrDescendant(object childGo, object parentGo)

@@ -32,7 +32,7 @@
 ## Current Phase
 
 **Phase:** Bugfix and UX hardening
-**Currently working on:** Second pass on settings/calibration/menu speech quality based on latest user log feedback.
+**Currently working on:** Third pass focused on toggle state speech reliability, calibration spam reduction, and hub duplicate cleanup.
 **Blocked by:** Nothing
 
 ## Codebase Analysis Progress
@@ -66,26 +66,25 @@ List features with their status:
 - **Known JP Label Localization Overrides** - DONE - Added localization mapping for common fixed labels (`もどる`, `フルスクリーン`, `Sound Check`, placeholder `テキスト`).
 - **Slider Value-Only Change Speech** - DONE - Slider value changes now prefer value-only output path to avoid repeating option label.
 - **Main Menu Version Merge** - DONE - Version text now queues into first main-menu selection utterance instead of speaking separately.
+- **Toggle/Timing Robustness Pass (v3)** - DONE - Improved toggle event target resolution, cleared stale pending UI announcements on settings/timing transitions, and throttled calibration test spam.
+- **Hub Tip Merge + Global Text Localization Pass** - DONE - Hub tips now queue as prefixes and merge with focused actions; direct `SendToTolk` output now passes known-label localization (`テキスト`, `もどる`, `Sound Check`, etc.).
 
 ## Pending Tests
 
 What the user should test in the next game session:
 
-- Main menu first focused item is merged with version in one utterance (example: `ver 1.0.2 Start 1 of 3`).
-- Settings entry now speaks tab + item together (one utterance), and no separate trailing `Audio`/`Display` line.
-- Settings close position is corrected (not inflated like `13 of 13`) in sound/display/timing pages.
-- Slider value changes announce only value changes (no immediate label-repeat line).
-- In timing calibration:
-  - offset changes are announced reliably with `ms`
-  - pressing `Test` announces offset slider value
-  - `Close/Test` position counts are reasonable
-- Stories/sound-check lists no longer double-speak item name with a second duplicate line when position mode is enabled.
-- Japanese fixed labels are localized through `Loc` (`もどる`, `フルスクリーン`, `Sound Check` rename path, placeholder `テキスト` fallback).
-- `F12` toggles debug mode and persists across game restarts (`MelonPreferences.cfg`).
-- `F3` toggles menu position mode and persists; when enabled, selection includes position (example `Close 5 of 5`).
-- On map/hub custom snapping, gamepad `LT/RT` cycles targets and `LB` no longer conflicts through mod fallback.
-- Entering level/detail menus avoids immediate `Play` echo after merged detail+action line.
-- Dialogue line format has a space after speaker colon (`Amane： Still thinking about fish?`).
+- Main menu version merge separator now has a pause marker (expected style: `ver 1.0.2. Start 1 of 3`).
+- Pressing settings switches (especially `Input Delay`) speaks the new state immediately on the same focused item.
+- Entering calibration is no longer spammy:
+  - no extra early `+xx ms` burst on state enter
+  - no repeated `Offset slider ...` lines after pressing `Test`
+- Pressing `Test` in calibration announces input delay relation text (expected style: `Input Delay +29 ms`), not `Offset slider ...`.
+- Returning from calibration to settings no longer emits stale value carry-over lines (like stray `70%`).
+- Hub interactables with placeholder JP labels (`テキスト`) speak localized fallback labels consistently.
+- Opening hub tips announces as one merged utterance with action focus where possible (for example, tip text + `OK`) without immediate duplicate follow-up.
+- Menu position suffix reliability after this pass:
+  - verify settings and calibration still report correct positions
+  - note any screens where position is still missing or incorrect
 
 ## Known Issues
 
@@ -125,6 +124,7 @@ Write anything the next conversation needs to know:
   - `4cddc4f` - selection spam reduction + slider/dialog speech formatting
   - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
   - `9e71f36` - settings/tab merge refinements, calibration hooks, and localization overrides for fixed JP labels
+  - Latest local commit in this session: third-pass fixes for toggle state speech, calibration spam reduction, and hub tip merge/localization path
 - `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.

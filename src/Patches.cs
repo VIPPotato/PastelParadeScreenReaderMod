@@ -80,6 +80,7 @@ internal static partial class Patches
 	private static string _lastTimingHintText;
 	private static DateTime _lastTimingHintAt = DateTime.MinValue;
 	private static DateTime _lastTimingTestAnnouncedAt = DateTime.MinValue;
+	private static DateTime _timingStateEnteredAt = DateTime.MinValue;
 	private static object _timingHintCaptureRootGo;
 	private static DateTime _timingHintCaptureUntil = DateTime.MinValue;
 	private static int _timingHintCaptureValueTextId;
@@ -1370,6 +1371,16 @@ internal static partial class Patches
 			_lastGameVersionText = s;
 			_lastGameVersionAt = now;
 
+			if (!(s.EndsWith(".", StringComparison.Ordinal) ||
+			      s.EndsWith("!", StringComparison.Ordinal) ||
+			      s.EndsWith("?", StringComparison.Ordinal) ||
+			      s.EndsWith(",", StringComparison.Ordinal) ||
+			      s.EndsWith(":", StringComparison.Ordinal) ||
+			      s.EndsWith("：", StringComparison.Ordinal)))
+			{
+				s += ".";
+			}
+
 			Main.Instance?.QueueSelectionPrefix(s, 2500);
 		}
 		catch { }
@@ -2372,6 +2383,7 @@ internal static partial class Patches
 			// 依遊戲原始碼，在進入設定頁時把「真正的 toggle 控制項」註冊成白名單：
 			// 只有這些才允許輸出 on/off，避免主選單/清單/行為按鈕被誤加狀態。
 			Main.Instance?.RegisterKnownSettingsToggles(__instance);
+			Main.Instance?.ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 
 			// Settings tabs (sound/display): prefix should be merged with first focused item.
 			if (tn == "PastelParade.UISoundSettingsState" || tn == "PastelParade.UIDisplaySettings")
@@ -2399,6 +2411,7 @@ internal static partial class Patches
 		{
 			// 離開設定頁時清掉白名單，避免回到主選單時又被當成開關輸出 on/off。
 			Main.Instance?.ClearKnownSettingsToggles();
+			Main.Instance?.ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 			// 避免 instanceId 重用造成後續誤朗讀
 			_settingsTmpTextIds.Clear();
 			_settingsCaptureRootGo = null;
@@ -2549,7 +2562,8 @@ internal static partial class Patches
 					string spoken = HubHandler.BuildTipAnnouncement(text);
 					if (!string.IsNullOrWhiteSpace(spoken))
 					{
-						Main.Instance?.SendToTolk(spoken);
+						Main.Instance?.QueueSelectionPrefix(spoken, 1800);
+						Main.Instance?.TriggerReadSelection();
 					}
 				}
 			}
@@ -3269,6 +3283,8 @@ internal static partial class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			if (__instance == null) return;
+			_timingStateEnteredAt = DateTime.Now;
+			Main.Instance?.ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 
 			// register mapping: timing slider -> timing text
 			object slider = __instance.GetType().GetField("_timingSlider", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
@@ -3281,23 +3297,10 @@ internal static partial class Patches
 				if (tid != 0) _timingTmpTextIds.Add(tid);
 			}
 
-			// speak current timing text once on enter
-			string s = timingText?.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(timingText) as string;
-			s = NormalizeTimingValueForSpeech(s);
-			if (!string.IsNullOrWhiteSpace(s))
-			{
-				var now = DateTime.Now;
-				if (!(string.Equals(_lastTimingSettingText, s, StringComparison.Ordinal) && (now - _lastTimingSettingTextAt).TotalMilliseconds < 500))
-				{
-					_lastTimingSettingText = s;
-					_lastTimingSettingTextAt = now;
-					Main.Instance?.SendToTolk(s);
-				}
-			}
-
-			// 正確 hook：提示文字是 UI Prefab 內的 TMP，進場時會被啟用（OnEnable / SetActive），不是程式設字。
-			// 因此這裡只設定「短窗口」與「根範圍」，由 TMP_Text.OnEnable hook 實際朗讀。
-			BeginTimingHintCaptureWindow(timingText);
+			// Keep timing enter output to focused selection only.
+			_timingHintCaptureRootGo = null;
+			_timingHintCaptureUntil = DateTime.MinValue;
+			_timingHintCaptureValueTextId = 0;
 		}
 		catch { }
 	}
@@ -3314,6 +3317,7 @@ internal static partial class Patches
 			if (string.IsNullOrWhiteSpace(s)) return;
 
 			var now = DateTime.Now;
+			if ((now - _timingStateEnteredAt).TotalMilliseconds < 280) return;
 			if (string.Equals(_lastTimingSettingText, s, StringComparison.Ordinal) && (now - _lastTimingSettingTextAt).TotalMilliseconds < 120)
 				return;
 			_lastTimingSettingText = s;
@@ -3328,6 +3332,8 @@ internal static partial class Patches
 		try
 		{
 			if (__instance == null) return;
+			_timingStateEnteredAt = DateTime.MinValue;
+			Main.Instance?.ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 			object slider = __instance.GetType().GetField("_timingSlider", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
 			object timingText = __instance.GetType().GetField("_timingText", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(__instance);
 			int sid = GetUnityInstanceId(slider);
@@ -4095,7 +4101,7 @@ internal static partial class Patches
 			if (string.IsNullOrWhiteSpace(s)) return;
 
 			var now = DateTime.Now;
-			if (string.Equals(_lastHubInteractableText, s, StringComparison.Ordinal) && (now - _lastHubInteractableTextAt).TotalMilliseconds < 500)
+			if (string.Equals(_lastHubInteractableText, s, StringComparison.Ordinal) && (now - _lastHubInteractableTextAt).TotalMilliseconds < 900)
 				return;
 			_lastHubInteractableText = s;
 			_lastHubInteractableTextAt = now;
@@ -5010,9 +5016,10 @@ internal static partial class Patches
 		{
 			if (!AutoSpeakEnabled) return;
 			var now = DateTime.Now;
-			if ((now - _lastTimingTestAnnouncedAt).TotalMilliseconds < 180)
+			if ((now - _lastTimingTestAnnouncedAt).TotalMilliseconds < 850)
 				return;
 			_lastTimingTestAnnouncedAt = now;
+			Main.Instance?.SuppressSelectionFor(300);
 			Main.Instance?.AnnounceTimingOffsetSliderValue();
 		}
 		catch (Exception ex)

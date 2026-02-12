@@ -95,6 +95,8 @@ private void InitTolk()
 
 			text = NormalizeOutputText(text);
 			if (string.IsNullOrEmpty(text)) return;
+			text = LocalizeKnownAnnouncementText(text);
+			if (string.IsNullOrEmpty(text)) return;
 
 			var now = DateTime.Now;
 
@@ -140,6 +142,8 @@ private void InitTolk()
 			if (_isQuitting) return;
 			if (string.IsNullOrWhiteSpace(text)) return;
 			text = NormalizeOutputText(text);
+			if (string.IsNullOrEmpty(text)) return;
+			text = LocalizeKnownAnnouncementText(text);
 			if (string.IsNullOrEmpty(text)) return;
 
 			LogSpeakDebug(text);
