@@ -486,7 +486,7 @@ public partial class Main : MelonMod
 
 	internal bool IsMenuPositionAnnouncementsEnabled => _menuPositionAnnouncementsEnabled;
 
-	internal void OnSettingsTabStateEntered(string stateTypeName)
+	internal void OnSettingsTabStateEntered(string stateTypeName, object stateInstance = null)
 	{
 		try
 		{
@@ -494,19 +494,24 @@ public partial class Main : MelonMod
 			if (string.IsNullOrWhiteSpace(stateTypeName)) return;
 			ClearPendingUiAnnouncements(clearSelectionPrefix: true);
 
-			string tabName = null;
+			string tabName = TryResolveSettingsTabNameFromGameUi(stateTypeName, stateInstance);
 			int tabIndex = 0;
 			const int tabTotal = 2;
 
 			if (string.Equals(stateTypeName, "PastelParade.UISoundSettingsState", StringComparison.Ordinal))
 			{
-				tabName = Loc.Get("settings_tab_sound");
 				tabIndex = 1;
 			}
 			else if (string.Equals(stateTypeName, "PastelParade.UIDisplaySettings", StringComparison.Ordinal))
 			{
-				tabName = Loc.Get("settings_tab_display");
 				tabIndex = 2;
+			}
+
+			if (string.IsNullOrWhiteSpace(tabName))
+			{
+				// Fallback only if game-UI extraction is unavailable.
+				if (tabIndex == 1) tabName = Loc.Get("settings_tab_sound");
+				else if (tabIndex == 2) tabName = Loc.Get("settings_tab_display");
 			}
 
 			if (string.IsNullOrWhiteSpace(tabName) || tabIndex <= 0) return;
@@ -519,6 +524,180 @@ public partial class Main : MelonMod
 		catch
 		{
 		}
+	}
+
+	private string TryResolveSettingsTabNameFromGameUi(string stateTypeName, object stateInstance)
+	{
+		try
+		{
+			string fromToggleGroup = TryResolveSettingsTabNameFromToggleGroup(stateTypeName, stateInstance);
+			if (!string.IsNullOrWhiteSpace(fromToggleGroup))
+				return NormalizeOutputText(fromToggleGroup);
+
+			// Fallback: candidate scan inside this state canvas.
+			string candidate = NormalizeOutputText(GetSettingsCategoryTitleCandidate(stateInstance));
+			if (IsLikelySettingsTabLabel(candidate, stateTypeName))
+				return candidate;
+		}
+		catch { }
+		return null;
+	}
+
+	private string TryResolveSettingsTabNameFromToggleGroup(string stateTypeName, object stateInstance)
+	{
+		try
+		{
+			if (stateInstance == null) return null;
+			object stateGo = stateInstance.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(stateInstance);
+			if (stateGo == null) return null;
+
+			object rootGo = FindTopmostCanvasGameObject(stateGo) ?? FindRootCanvasGameObject(stateGo) ?? stateGo;
+			Type btnType = AccessTools.TypeByName("MornUGUI.MornUGUIButton");
+			if (btnType == null) return null;
+
+			Array arr = GetComponentsInChildrenArray(rootGo, btnType);
+			if (arr == null || arr.Length == 0) return null;
+
+			var groups = new Dictionary<int, List<(bool isOn, string text)>>();
+			for (int i = 0; i < arr.Length; i++)
+			{
+				var btn = arr.GetValue(i);
+				if (btn == null) continue;
+
+				object go = null;
+				try { go = btn.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(btn); } catch { go = null; }
+				if (go == null) continue;
+				try
+				{
+					var activeObj = go.GetType().GetProperty("activeInHierarchy", BindingFlags.Instance | BindingFlags.Public)?.GetValue(go);
+					if (activeObj is bool activeInHierarchy && !activeInHierarchy) continue;
+				}
+				catch { }
+
+				object asToggle = null;
+				try { asToggle = btnType.GetProperty("AsToggle", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(btn); } catch { asToggle = null; }
+				if (asToggle == null) continue;
+
+				object groupObj = null;
+				try
+				{
+					var pGroup = asToggle.GetType().GetProperty("Group", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+					           ?? asToggle.GetType().GetProperty("group", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+					           ?? asToggle.GetType().GetProperty("ToggleGroup", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					groupObj = pGroup?.GetValue(asToggle);
+				}
+				catch { groupObj = null; }
+				if (groupObj == null) continue;
+				int groupId = GetUnityInstanceId(groupObj);
+				if (groupId == 0) continue;
+
+				bool hasIsOn = false;
+				bool isOn = false;
+				try
+				{
+					var pIsOn = asToggle.GetType().GetProperty("IsOn", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+					           ?? asToggle.GetType().GetProperty("isOn", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (pIsOn != null && pIsOn.PropertyType == typeof(bool))
+					{
+						hasIsOn = true;
+						var v = pIsOn.GetValue(asToggle);
+						if (v is bool b) isOn = b;
+					}
+				}
+				catch { hasIsOn = false; }
+				if (!hasIsOn) continue;
+
+				string text = NormalizeOutputText(GetSelectablePreviewText(go));
+				if (!IsLikelySettingsTabLabel(text, stateTypeName)) continue;
+
+				if (!groups.TryGetValue(groupId, out var list))
+				{
+					list = new List<(bool isOn, string text)>(4);
+					groups[groupId] = list;
+				}
+				list.Add((isOn, text));
+			}
+
+			string best = null;
+			int bestScore = int.MinValue;
+			foreach (var kv in groups)
+			{
+				var list = kv.Value;
+				if (list == null || list.Count < 2 || list.Count > 6) continue;
+
+				var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				string selectedText = null;
+				for (int i = 0; i < list.Count; i++)
+				{
+					if (!string.IsNullOrWhiteSpace(list[i].text))
+						unique.Add(list[i].text);
+					if (list[i].isOn && !string.IsNullOrWhiteSpace(list[i].text))
+						selectedText = list[i].text;
+				}
+
+				if (unique.Count < 2 || string.IsNullOrWhiteSpace(selectedText)) continue;
+				if (!IsLikelySettingsTabLabel(selectedText, stateTypeName)) continue;
+
+				int score = 0;
+				if (unique.Count == 2) score += 50;
+				else if (unique.Count == 3) score += 20;
+
+				bool selectedLooksSound = LooksLikeSoundTabTitle(selectedText);
+				bool selectedLooksDisplay = LooksLikeDisplayTabTitle(selectedText);
+				if (selectedLooksSound || selectedLooksDisplay) score += 30;
+
+				if (string.Equals(stateTypeName, "PastelParade.UISoundSettingsState", StringComparison.Ordinal) && selectedLooksSound) score += 100;
+				if (string.Equals(stateTypeName, "PastelParade.UIDisplaySettings", StringComparison.Ordinal) && selectedLooksDisplay) score += 100;
+
+				if (score > bestScore)
+				{
+					bestScore = score;
+					best = selectedText;
+				}
+			}
+
+			return best;
+		}
+		catch { return null; }
+	}
+
+	private static bool IsLikelySettingsTabLabel(string text, string stateTypeName)
+	{
+		try
+		{
+			text = NormalizeOutputText(text);
+			if (string.IsNullOrWhiteSpace(text)) return false;
+			if (text.Length > 24) return false;
+
+			if (text.Contains("%")) return false;
+			if (text.IndexOf("ms", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+			if (text.StartsWith("x ", StringComparison.OrdinalIgnoreCase) || text.Contains(" x ")) return false;
+			double _;
+			if (double.TryParse(text, out _)) return false;
+
+			string lower = text.Trim().ToLowerInvariant();
+			string[] blocked =
+			{
+				"sfx", "bgm", "input delay", "adjust timing", "close", "apply",
+				"resolution", "scale", "max fps", "v-sync", "vsync", "anti-aliasing",
+				"anti aliasing", "ui vibration", "fullscreen", "back", "settings",
+				"効果音", "入力遅延", "タイミング調整", "閉じる", "適用", "解像度",
+				"華感", "戻る", "もどる", "設定",
+				"音效", "输入延迟", "輸入延遲", "调整时机", "調整時機", "关闭", "關閉",
+				"套用", "应用", "解析度", "分辨率", "返回"
+			};
+			for (int i = 0; i < blocked.Length; i++)
+			{
+				if (lower == blocked[i]) return false;
+			}
+
+			if (string.Equals(stateTypeName, "PastelParade.UISoundSettingsState", StringComparison.Ordinal) && LooksLikeDisplayTabTitle(text))
+				return false;
+			if (string.Equals(stateTypeName, "PastelParade.UIDisplaySettings", StringComparison.Ordinal) && LooksLikeSoundTabTitle(text))
+				return false;
+			return true;
+		}
+		catch { return false; }
 	}
 
 	internal void ClearPendingUiAnnouncements(bool clearSelectionPrefix = false)

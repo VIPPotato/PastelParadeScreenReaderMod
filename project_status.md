@@ -32,7 +32,7 @@
 ## Current Phase
 
 **Phase:** Bugfix and UX hardening
-**Currently working on:** Third pass focused on toggle state speech reliability, calibration spam reduction, and hub duplicate cleanup.
+**Currently working on:** Settings tab label source alignment so audio/display names are read directly from game UI text.
 **Blocked by:** Nothing
 
 ## Codebase Analysis Progress
@@ -62,6 +62,7 @@ List features with their status:
 - **World Map / Hub Trigger Remap** - DONE - Custom cycle controls support keyboard `[ ]` + gamepad `LT/RT`, no longer tied to `TabLeft/TabRight` fallback.
 - **Info + Menu Merge** - DONE - Added prefix merge flow so detail text and follow-up menu action can be spoken as one utterance.
 - **Settings Tab Announcement Merge** - DONE - Sound/display tab prefixes are now queued and merged with first focused item as one utterance.
+- **Settings Tab Names from Game UI** - DONE - Sound/display tab labels are now extracted from live `MornUGUIButton.AsToggle` tab group text instead of mod-localized hardcoded names (with fallback only when extraction fails).
 - **Calibration Test Feedback Hook** - DONE - Added `UITimingBar.MakeCopy` + `UITimingSettingState.UpdateTimingOffset` hooks for offset value announcements.
 - **Known JP Label Localization Overrides** - DONE - Added localization mapping for common fixed labels (`もどる`, `フルスクリーン`, `Sound Check`, placeholder `テキスト`).
 - **Slider Value-Only Change Speech** - DONE - Slider value changes now prefer value-only output path to avoid repeating option label.
@@ -74,6 +75,7 @@ List features with their status:
 What the user should test in the next game session:
 
 - Main menu version merge separator now has a pause marker (expected style: `ver 1.0.2. Start 1 of 3`).
+- Settings tab names should match the game's own current language strings (audio/display) instead of mod-owned wording.
 - Pressing settings switches (especially `Input Delay`) speaks the new state immediately on the same focused item.
 - Entering calibration is no longer spammy:
   - no extra early `+xx ms` burst on state enter
@@ -125,6 +127,7 @@ Write anything the next conversation needs to know:
   - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
   - `9e71f36` - settings/tab merge refinements, calibration hooks, and localization overrides for fixed JP labels
   - Latest local commit in this session: third-pass fixes for toggle state speech, calibration spam reduction, and hub tip merge/localization path
+  - Pending in current workspace: settings tab name source changed to game UI labels (audio/display) instead of Loc labels
 - `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.

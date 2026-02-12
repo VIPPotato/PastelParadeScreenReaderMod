@@ -72,14 +72,18 @@ Initial tutorial-related UI findings:
 - Settings states confirmed from decompiled code:
   - `UISoundSettingsState`
     - controls: `_seSlider`, `_bgmSlider`, `_inputResultButton`
+    - no dedicated serialized field for tab title text; tab navigation transitions through `_leftTab` / `_rightTab`
     - tab switch in `OnStateUpdate` via `_inputCtrl.TabLeft` / `_inputCtrl.TabRight`
   - `UIDisplaySettings`
     - controls: fullscreen/vsync/AA/vibration toggles + render scale/resolution/max FPS sliders + `_applyButton`
+    - no dedicated serialized field for tab title text; tab navigation transitions through `_leftTab` / `_rightTab`
     - tab switch in `OnStateUpdate` via `_inputCtrl.TabLeft` / `_inputCtrl.TabRight`
   - `UITimingSettingState`
     - timing offset text source: `_timingText`
     - core update method: `UpdateTimingOffset(bool isUpper)`
     - test action path: `_timingButton.OnSubmit -> _timingBar.MakeCopy()`
+- Tab label extraction guidance (mod side):
+  - settings tab names should be read from live `MornUGUIButton.AsToggle` group text in UI, not hardcoded mod strings
 
 Likely reflection relevance:
 

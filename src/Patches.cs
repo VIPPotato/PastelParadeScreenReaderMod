@@ -2388,7 +2388,7 @@ internal static partial class Patches
 			// Settings tabs (sound/display): prefix should be merged with first focused item.
 			if (tn == "PastelParade.UISoundSettingsState" || tn == "PastelParade.UIDisplaySettings")
 			{
-				Main.Instance?.OnSettingsTabStateEntered(tn);
+				Main.Instance?.OnSettingsTabStateEntered(tn, __instance);
 			}
 			else
 			{
