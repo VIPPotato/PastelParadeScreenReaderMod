@@ -124,6 +124,7 @@ public partial class Main : MelonMod
 	// 但很多 UI（含主選單/清單）也可能用 AsToggle 來做選取高亮；那不該唸 on/off。
 	// 因此改成白名單：只有我們從設定 State instance 取到的那些 toggle 按鈕才允許輸出 on/off。
 	private readonly HashSet<int> _knownSettingsToggleIds = new HashSet<int>();
+	private readonly Dictionary<int, object> _knownSettingsToggleGoByObjectHash = new Dictionary<int, object>();
 
 	// 只有「真的有開關的設定頁」才允許 0/1 fallback（音訊/顯示）；校準介面不該出現 0/1
 	// 先前用來限制 0/1 fallback 的旗標，已改成用「元件本身是否為 toggle」決定，保留會造成誤用與警告
@@ -1880,7 +1881,7 @@ public partial class Main : MelonMod
 			if (string.IsNullOrWhiteSpace(finalText)) return;
 			if (!string.IsNullOrWhiteSpace(_lastMergedActionText) &&
 			    string.Equals(finalText, _lastMergedActionText, StringComparison.Ordinal) &&
-			    (DateTime.Now - _lastMergedActionAt).TotalMilliseconds < 1200)
+			    (DateTime.Now - _lastMergedActionAt).TotalMilliseconds < 2200)
 				return;
 
 			try
@@ -2633,11 +2634,11 @@ public partial class Main : MelonMod
 			if (_isQuitting) return;
 			if (DateTime.Now < _ignoreSliderChangesUntil) return; // 共用：進頁初始化先略過
 			if (toggleComponent == null) return;
-			var toggleGo = ResolveToggleAnnouncementTarget(toggleComponent);
+			var toggleGo = TryResolveKnownSettingsToggleGo(toggleComponent) ?? ResolveToggleAnnouncementTarget(toggleComponent);
 			if (toggleGo == null) return;
 			toggleGo = PromoteToggleAnnouncementTarget(toggleGo) ?? toggleGo;
 			_pendingToggleGo = toggleGo;
-			_pendingToggleSpeakAt = DateTime.Now.AddMilliseconds(20);
+			_pendingToggleSpeakAt = DateTime.Now.AddMilliseconds(80);
 		}
 		catch { }
 	}
@@ -2724,6 +2725,66 @@ public partial class Main : MelonMod
 		{
 			return null;
 		}
+	}
+
+	private object TryResolveKnownSettingsToggleGo(object toggleComponent)
+	{
+		try
+		{
+			if (toggleComponent == null) return null;
+
+			bool TryLookup(object keyObj, out object go)
+			{
+				go = null;
+				try
+				{
+					if (keyObj == null) return false;
+					int key = RuntimeHelpers.GetHashCode(keyObj);
+					if (key == 0) return false;
+					lock (_knownSettingsToggleIds)
+					{
+						return _knownSettingsToggleGoByObjectHash.TryGetValue(key, out go) && go != null;
+					}
+				}
+				catch { return false; }
+			}
+
+			if (TryLookup(toggleComponent, out var directGo))
+				return directGo;
+
+			string[] members =
+			{
+				"AsToggle", "_asToggle", "Toggle", "_toggle",
+				"Owner", "_owner", "Target", "_target"
+			};
+			Type t = toggleComponent.GetType();
+			for (int i = 0; i < members.Length; i++)
+			{
+				string name = members[i];
+				try
+				{
+					var p = t.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (p != null)
+					{
+						var v = p.GetValue(toggleComponent, null);
+						if (TryLookup(v, out var go)) return go;
+					}
+				}
+				catch { }
+				try
+				{
+					var f = t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+					if (f != null)
+					{
+						var v = f.GetValue(toggleComponent);
+						if (TryLookup(v, out var go)) return go;
+					}
+				}
+				catch { }
+			}
+		}
+		catch { }
+		return null;
 	}
 
 	private static object PromoteToggleAnnouncementTarget(object go)

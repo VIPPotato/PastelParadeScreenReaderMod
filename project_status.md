@@ -32,7 +32,7 @@
 ## Current Phase
 
 **Phase:** Bugfix and UX hardening
-**Currently working on:** Settings tab label source alignment so audio/display names are read directly from game UI text.
+**Currently working on:** Follow-up fixes from latest user log: startup duplicate suppression and reliable switch state change announcements.
 **Blocked by:** Nothing
 
 ## Codebase Analysis Progress
@@ -69,12 +69,14 @@ List features with their status:
 - **Main Menu Version Merge** - DONE - Version text now queues into first main-menu selection utterance instead of speaking separately.
 - **Toggle/Timing Robustness Pass (v3)** - DONE - Improved toggle event target resolution, cleared stale pending UI announcements on settings/timing transitions, and throttled calibration test spam.
 - **Hub Tip Merge + Global Text Localization Pass** - DONE - Hub tips now queue as prefixes and merge with focused actions; direct `SendToTolk` output now passes known-label localization (`テキスト`, `もどる`, `Sound Check`, etc.).
+- **Startup + Switch Toggle Reliability (v4)** - DONE - Extended merged-action suppression window to remove duplicate initial `Start` read, and mapped Morn `AsToggle` instances back to known settings buttons so state changes announce reliably.
 
 ## Pending Tests
 
 What the user should test in the next game session:
 
 - Main menu version merge separator now has a pause marker (expected style: `ver 1.0.2. Start 1 of 3`).
+- Startup entry should no longer read `Start 1 of 3` twice after merged version line.
 - Settings tab names should match the game's own current language strings (audio/display) instead of mod-owned wording.
 - Pressing settings switches (especially `Input Delay`) speaks the new state immediately on the same focused item.
 - Entering calibration is no longer spammy:
@@ -126,8 +128,8 @@ Write anything the next conversation needs to know:
   - `4cddc4f` - selection spam reduction + slider/dialog speech formatting
   - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
   - `9e71f36` - settings/tab merge refinements, calibration hooks, and localization overrides for fixed JP labels
-  - Latest local commit in this session: third-pass fixes for toggle state speech, calibration spam reduction, and hub tip merge/localization path
   - Latest local commit in this session: `a36f3fe` settings tab names now source from game UI labels (audio/display) instead of Loc labels
+  - Pending in current workspace: v4 startup duplicate suppression + switch toggle mapping reliability pass
 - `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.

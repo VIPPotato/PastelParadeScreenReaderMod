@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using MelonLoader;
 
@@ -269,10 +270,29 @@ private void InitTolk()
 					var f = stateInstance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 					var btn = f?.GetValue(stateInstance);
 					if (btn == null) return;
+					object btnGo = null;
+					try { btnGo = btn.GetType().GetProperty("gameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(btn); } catch { btnGo = null; }
 					var m = btn.GetType().GetMethod("GetInstanceID", BindingFlags.Instance | BindingFlags.Public);
 					if (m == null) return;
 					int id = (int)m.Invoke(btn, null);
 					if (id != 0) ids.Add(id);
+
+					// Map Morn AsToggle instance to the owning button gameObject so toggle callbacks can
+					// always resolve back to the readable settings item.
+					try
+					{
+						var pAsToggle = btn.GetType().GetProperty("AsToggle", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+						var asToggle = pAsToggle?.GetValue(btn);
+						int key = (asToggle == null) ? 0 : RuntimeHelpers.GetHashCode(asToggle);
+						if (key != 0 && btnGo != null)
+						{
+							lock (_knownSettingsToggleIds)
+							{
+								_knownSettingsToggleGoByObjectHash[key] = btnGo;
+							}
+						}
+					}
+					catch { }
 				}
 				catch { }
 			}
@@ -306,7 +326,11 @@ private void InitTolk()
 	{
 		try
 		{
-			lock (_knownSettingsToggleIds) _knownSettingsToggleIds.Clear();
+			lock (_knownSettingsToggleIds)
+			{
+				_knownSettingsToggleIds.Clear();
+				_knownSettingsToggleGoByObjectHash.Clear();
+			}
 		}
 		catch { }
 	}
