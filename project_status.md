@@ -32,7 +32,7 @@
 ## Current Phase
 
 **Phase:** Bugfix and UX hardening
-**Currently working on:** Addressing user-reported spam/announcement issues and adding persistent runtime toggles (debug + menu position).
+**Currently working on:** Second pass on settings/calibration/menu speech quality based on latest user log feedback.
 **Blocked by:** Nothing
 
 ## Codebase Analysis Progress
@@ -61,26 +61,38 @@ List features with their status:
 - **Timing Calibration Fixes** - DONE - Suppressed calibration `Test` spam; timing value speech normalized to `ms`.
 - **World Map / Hub Trigger Remap** - DONE - Custom cycle controls support keyboard `[ ]` + gamepad `LT/RT`, no longer tied to `TabLeft/TabRight` fallback.
 - **Info + Menu Merge** - DONE - Added prefix merge flow so detail text and follow-up menu action can be spoken as one utterance.
+- **Settings Tab Announcement Merge** - DONE - Sound/display tab prefixes are now queued and merged with first focused item as one utterance.
+- **Calibration Test Feedback Hook** - DONE - Added `UITimingBar.MakeCopy` + `UITimingSettingState.UpdateTimingOffset` hooks for offset value announcements.
+- **Known JP Label Localization Overrides** - DONE - Added localization mapping for common fixed labels (`もどる`, `フルスクリーン`, `Sound Check`, placeholder `テキスト`).
+- **Slider Value-Only Change Speech** - DONE - Slider value changes now prefer value-only output path to avoid repeating option label.
+- **Main Menu Version Merge** - DONE - Version text now queues into first main-menu selection utterance instead of speaking separately.
 
 ## Pending Tests
 
 What the user should test in the next game session:
 
-- Startup/main menu no longer repeatedly says `Start` while idle.
-- Settings navigation is less spammy and slider lines include role (example: `BGM slider 60%`).
+- Main menu first focused item is merged with version in one utterance (example: `ver 1.0.2 Start 1 of 3`).
+- Settings entry now speaks tab + item together (one utterance), and no separate trailing `Audio`/`Display` line.
+- Settings close position is corrected (not inflated like `13 of 13`) in sound/display/timing pages.
+- Slider value changes announce only value changes (no immediate label-repeat line).
 - In timing calibration:
-  - value changes are announced with `ms`
-  - repeated `Test` spam is gone while idle/backing out
+  - offset changes are announced reliably with `ms`
+  - pressing `Test` announces offset slider value
+  - `Close/Test` position counts are reasonable
+- Stories/sound-check lists no longer double-speak item name with a second duplicate line when position mode is enabled.
+- Japanese fixed labels are localized through `Loc` (`もどる`, `フルスクリーン`, `Sound Check` rename path, placeholder `テキスト` fallback).
 - `F12` toggles debug mode and persists across game restarts (`MelonPreferences.cfg`).
 - `F3` toggles menu position mode and persists; when enabled, selection includes position (example `Close 5 of 5`).
 - On map/hub custom snapping, gamepad `LT/RT` cycles targets and `LB` no longer conflicts through mod fallback.
-- Entering level/detail menus after info reads as one utterance where applicable (detail + action like `Play`).
+- Entering level/detail menus avoids immediate `Play` echo after merged detail+action line.
 - Dialogue line format has a space after speaker colon (`Amane： Still thinking about fish?`).
 
 ## Known Issues
 
 - Large monolithic file still remains:
   - `working/TolkExporter/Patches.cs` is still very large and should be split by feature in next refactor step.
+- Hub placeholder entries still need richer context mapping:
+  - current fallback localizes `テキスト` to a generic item label, but per-item semantic naming is not complete yet.
 
 ## Architecture Decisions
 
@@ -112,6 +124,8 @@ Write anything the next conversation needs to know:
   - `e8e5522` - persisted `F12` debug + `F3` menu position toggles
   - `4cddc4f` - selection spam reduction + slider/dialog speech formatting
   - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
+  - `9e71f36` - settings/tab merge refinements, calibration hooks, and localization overrides for fixed JP labels
 - `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.
+- TODO (future feature): album full-screen image descriptions should be announced when an image is opened.

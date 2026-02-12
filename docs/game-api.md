@@ -69,6 +69,17 @@ Initial tutorial-related UI findings:
   - Uses private serialized fields (`_talkPanel`, `_leftCountText`, etc.) and dependency injection.
 - `UIHubTips` displays localized tip text from interacted object data.
   - Reads `InteractedObjectInfo.Tips.Get(_localize.CurrentLanguage)`
+- Settings states confirmed from decompiled code:
+  - `UISoundSettingsState`
+    - controls: `_seSlider`, `_bgmSlider`, `_inputResultButton`
+    - tab switch in `OnStateUpdate` via `_inputCtrl.TabLeft` / `_inputCtrl.TabRight`
+  - `UIDisplaySettings`
+    - controls: fullscreen/vsync/AA/vibration toggles + render scale/resolution/max FPS sliders + `_applyButton`
+    - tab switch in `OnStateUpdate` via `_inputCtrl.TabLeft` / `_inputCtrl.TabRight`
+  - `UITimingSettingState`
+    - timing offset text source: `_timingText`
+    - core update method: `UpdateTimingOffset(bool isUpper)`
+    - test action path: `_timingButton.OnSubmit -> _timingBar.MakeCopy()`
 
 Likely reflection relevance:
 
@@ -79,6 +90,10 @@ Source:
 - `decompiled/PastelParade/TutorialUI.cs`
 - `decompiled/PastelParade/UIHubTips.cs`
 - `decompiled/PastelParade/HubObjectInfo.cs`
+- `decompiled/PastelParade/UISoundSettingsState.cs`
+- `decompiled/PastelParade/UIDisplaySettings.cs`
+- `decompiled/PastelParade/UITimingSettingState.cs`
+- `decompiled/PastelParade/UITimingBar.cs`
 
 ---
 
@@ -191,3 +206,4 @@ Detailed extraction notes:
 
 - **2026-02-11:** Initial setup documentation created with tutorial/localization baseline findings.
 - **2026-02-11:** Added verified gamepad trigger availability and documented current mod key usage (`F3`, `F12`, `[`, `]`, `LT`, `RT`).
+- **2026-02-11:** Added concrete settings/calibration hook points (`UpdateTimingOffset`, `UITimingBar.MakeCopy`, settings tab transition flow).
