@@ -127,7 +127,7 @@ Write anything the next conversation needs to know:
   - `6075797` - timing calibration fixes + trigger remap + detail/menu merge
   - `9e71f36` - settings/tab merge refinements, calibration hooks, and localization overrides for fixed JP labels
   - Latest local commit in this session: third-pass fixes for toggle state speech, calibration spam reduction, and hub tip merge/localization path
-  - Pending in current workspace: settings tab name source changed to game UI labels (audio/display) instead of Loc labels
+  - Latest local commit in this session: `a36f3fe` settings tab names now source from game UI labels (audio/display) instead of Loc labels
 - `docs/game-api.md` updated with verified trigger availability and current mod key usage.
 - `scripts/Test-ModSetup.ps1` check on 2026-02-11 now passes fully (16 OK, 0 warnings, 0 errors).
 - Next refactor target: split `Patches.cs` into feature files (`Menu`, `Dialogue`, `WorldMap`, `Settings`, `Results`) without behavior changes.
